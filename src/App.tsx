@@ -1,4 +1,5 @@
 import { useMemo, useState, useCallback } from "react";
+import JSZip from "jszip";
 
 type PieceType = "pawn" | "knight" | "bishop" | "rook" | "queen" | "king";
 type PieceSide = "white" | "black";
@@ -38,13 +39,23 @@ const boardSize = 320;
 const sqSize = boardSize / 8;
 const svgSqSize = 200 / 8;
 
-const allPieceTypes: PieceType[] = ["king", "queen", "rook", "bishop", "knight", "pawn"];
+const allPieceTypes: PieceType[] = [
+  "king",
+  "queen",
+  "rook",
+  "bishop",
+  "knight",
+  "pawn",
+];
 
 const lightSquarePositions: { x: number; y: number }[] = [];
 for (let row = 0; row < 8; row++) {
   for (let col = 0; col < 8; col++) {
     if ((row + col) % 2 === 0) {
-      lightSquarePositions.push({ x: col * svgSqSize, y: row * svgSqSize });
+      lightSquarePositions.push({
+        x: col * svgSqSize,
+        y: row * svgSqSize,
+      });
     }
   }
 }
@@ -113,7 +124,11 @@ function getPseudoLegalMoves(piece: Piece, pieces: Piece[]) {
   const occupied = new Map(pieces.map((p) => [p.square, p]));
   const results: string[] = [];
 
-  const pushIfValid = (targetFile: number, targetRank: number, canCapture = true) => {
+  const pushIfValid = (
+    targetFile: number,
+    targetRank: number,
+    canCapture = true
+  ) => {
     if (!isInsideBoard(targetFile, targetRank)) return;
     const target = toSquare(targetFile, targetRank);
     const blocker = occupied.get(target);
@@ -130,7 +145,10 @@ function getPseudoLegalMoves(piece: Piece, pieces: Piece[]) {
     const dir = piece.side === "white" ? 1 : -1;
     const startRank = piece.side === "white" ? 2 : 7;
     const oneStep = toSquare(fileIndex, rank + dir);
-    if (isInsideBoard(fileIndex, rank + dir) && !occupied.has(oneStep)) {
+    if (
+      isInsideBoard(fileIndex, rank + dir) &&
+      !occupied.has(oneStep)
+    ) {
       results.push(oneStep);
       const twoStep = toSquare(fileIndex, rank + dir * 2);
       if (rank === startRank && !occupied.has(twoStep)) {
@@ -144,13 +162,14 @@ function getPseudoLegalMoves(piece: Piece, pieces: Piece[]) {
       if (!isInsideBoard(d.file, d.rank)) return;
       const sq = toSquare(d.file, d.rank);
       const targetPiece = occupied.get(sq);
-      if (targetPiece && targetPiece.side !== piece.side) results.push(sq);
+      if (targetPiece && targetPiece.side !== piece.side)
+        results.push(sq);
     });
     return results;
   }
 
   if (piece.type === "knight") {
-    const jumps = [
+    [
       [1, 2],
       [2, 1],
       [2, -1],
@@ -159,8 +178,9 @@ function getPseudoLegalMoves(piece: Piece, pieces: Piece[]) {
       [-2, -1],
       [-2, 1],
       [-1, 2],
-    ];
-    jumps.forEach(([dx, dy]) => pushIfValid(fileIndex + dx, rank + dy));
+    ].forEach(([dx, dy]) =>
+      pushIfValid(fileIndex + dx, rank + dy)
+    );
     return results;
   }
 
@@ -216,10 +236,17 @@ function uid() {
 }
 
 function minifyHtml(html: string) {
-  return html.replace(/\n+/g, " ").replace(/>\s+</g, "><").replace(/\s{2,}/g, " ").trim();
+  return html
+    .replace(/\n+/g, " ")
+    .replace(/>\s+</g, "><")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
-function computeArrowPolygon(fromSquare: string, toSquare: string) {
+function computeArrowPolygon(
+  fromSquare: string,
+  toSquare: string
+) {
   const f = squareToCoordSVG(fromSquare);
   const t = squareToCoordSVG(toSquare);
   const dx = t.centerX - f.centerX;
@@ -246,9 +273,13 @@ function computeArrowPolygon(fromSquare: string, toSquare: string) {
     [cx + shaftWidth, cy + headBase],
     [cx + shaftWidth, cy + bottom],
   ];
-  const points = pts.map((p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`).join(" ");
+  const points = pts
+    .map((p) => `${p[0].toFixed(2)},${p[1].toFixed(2)}`)
+    .join(" ");
   return { points, rotation: angleDeg, cx, cy };
 }
+
+// ─── Section Data ──────────────────────────────────────────────────────
 
 type SectionData = {
   id: number;
@@ -293,6 +324,8 @@ function createDefaultSection(id: number): SectionData {
   };
 }
 
+// ─── Components ────────────────────────────────────────────────────────
+
 function PieceTray({
   side,
   onDragStart,
@@ -308,7 +341,12 @@ function PieceTray({
           draggable
           onDragStart={(e) => {
             e.dataTransfer.effectAllowed = "move";
-            onDragStart({ side, type, sourceSquare: null, pieceId: null });
+            onDragStart({
+              side,
+              type,
+              sourceSquare: null,
+              pieceId: null,
+            });
           }}
           className="flex h-8 w-8 cursor-grab items-center justify-center rounded bg-stone-200 text-xl shadow-sm transition hover:bg-stone-300 hover:shadow active:cursor-grabbing"
           title={`${side} ${type}`}
@@ -360,7 +398,11 @@ function InteractiveBoard({
   highlights: Highlight[];
   arrows: Arrow[];
   moveHints: string[];
-  onPieceDrop: (side: PieceSide, type: PieceType, square: string) => void;
+  onPieceDrop: (
+    side: PieceSide,
+    type: PieceType,
+    square: string
+  ) => void;
   onPieceMove: (pieceId: number, newSquare: string) => void;
   onPieceRemove: (pieceId: number) => void;
   dragItem: DragItem | null;
@@ -370,17 +412,25 @@ function InteractiveBoard({
   onPieceHint: (square: string) => void;
   editMode: "piece" | "highlight" | "arrow";
 }) {
-  const [hoverSquare, setHoverSquare] = useState<string | null>(null);
-  const [arrowStart, setArrowStart] = useState<string | null>(null);
-  const [arrowPreview, setArrowPreview] = useState<string | null>(null);
+  const [hoverSquare, setHoverSquare] = useState<
+    string | null
+  >(null);
+  const [arrowStart, setArrowStart] = useState<
+    string | null
+  >(null);
+  const [arrowPreview, setArrowPreview] = useState<
+    string | null
+  >(null);
 
   const getPieceAt = useCallback(
-    (square: string) => pieces.find((p) => p.square === square),
+    (square: string) =>
+      pieces.find((p) => p.square === square),
     [pieces]
   );
 
   return (
     <div className="inline-block select-none">
+      {/* File labels top */}
       <div className="flex" style={{ paddingLeft: 18 }}>
         {files.map((f) => (
           <div
@@ -393,6 +443,7 @@ function InteractiveBoard({
         ))}
       </div>
       <div className="flex">
+        {/* Rank labels left */}
         <div className="flex flex-col">
           {ranks.map((r) => (
             <div
@@ -404,10 +455,13 @@ function InteractiveBoard({
             </div>
           ))}
         </div>
+
+        {/* Board area */}
         <div
           className="relative"
           style={{ width: boardSize, height: boardSize }}
         >
+          {/* Square grid */}
           <div
             className="grid border border-stone-400"
             style={{
@@ -417,15 +471,34 @@ function InteractiveBoard({
           >
             {ranks.map((_, rankIdx) =>
               files.map((_, fileIdx) => {
-                const square = squareFromFileRank(fileIdx, rankIdx);
-                const isLight = (rankIdx + fileIdx) % 2 === 0;
+                const square = squareFromFileRank(
+                  fileIdx,
+                  rankIdx
+                );
+                const isLight =
+                  (rankIdx + fileIdx) % 2 === 0;
                 const piece = getPieceAt(square);
                 const isHover = hoverSquare === square;
-                const isArrowSrc = arrowStart === square;
-                const isArrowTgt = arrowPreview === square && arrowStart !== null;
-                const hl = highlights.find((h) => h.square === square);
+                const isArrowSrc =
+                  arrowStart === square;
+                const isArrowTgt =
+                  arrowPreview === square &&
+                  arrowStart !== null;
+                const hl = highlights.find(
+                  (h) => h.square === square
+                );
+                const isHintSource =
+                  moveHints.length > 0 &&
+                  piece &&
+                  pieces.find(
+                    (p) =>
+                      p.square === square &&
+                      moveHints.length > 0
+                  );
+
                 let bg = isLight ? "#eeeed2" : "#769656";
-                if (isHover && dragItem) bg = isLight ? "#f5f5a0" : "#8aad5a";
+                if (isHover && dragItem)
+                  bg = isLight ? "#f5f5a0" : "#8aad5a";
                 if (isArrowSrc) bg = "#f87171";
                 if (isArrowTgt) bg = "#60a5fa";
 
@@ -437,43 +510,73 @@ function InteractiveBoard({
                       width: sqSize,
                       height: sqSize,
                       backgroundColor: bg,
-                      transition: "background-color 0.12s",
+                      transition:
+                        "background-color 0.12s",
                     }}
                     onDragOver={(e) => {
                       e.preventDefault();
-                      e.dataTransfer.dropEffect = "move";
+                      e.dataTransfer.dropEffect =
+                        "move";
                       setHoverSquare(square);
                     }}
-                    onDragLeave={() => setHoverSquare(null)}
+                    onDragLeave={() =>
+                      setHoverSquare(null)
+                    }
                     onDrop={(e) => {
                       e.preventDefault();
                       setHoverSquare(null);
                       if (!dragItem) return;
-                      if (dragItem.sourceSquare && dragItem.pieceId) {
-                        if (dragItem.sourceSquare !== square) onPieceMove(dragItem.pieceId, square);
+                      if (
+                        dragItem.sourceSquare &&
+                        dragItem.pieceId
+                      ) {
+                        if (
+                          dragItem.sourceSquare !==
+                          square
+                        )
+                          onPieceMove(
+                            dragItem.pieceId,
+                            square
+                          );
                       } else {
-                        onPieceDrop(dragItem.side, dragItem.type, square);
+                        onPieceDrop(
+                          dragItem.side,
+                          dragItem.type,
+                          square
+                        );
                       }
                       setDragItem(null);
                     }}
                     onClick={() => {
                       if (editMode === "piece") {
                         onPieceHint(square);
-                      } else if (editMode === "highlight") {
+                      } else if (
+                        editMode === "highlight"
+                      ) {
                         onHighlightToggle(square);
-                      } else if (editMode === "arrow") {
+                      } else if (
+                        editMode === "arrow"
+                      ) {
                         if (!arrowStart) {
                           setArrowStart(square);
                           setArrowPreview(null);
                         } else {
-                          if (arrowStart !== square) onArrowDraw(arrowStart, square);
+                          if (arrowStart !== square)
+                            onArrowDraw(
+                              arrowStart,
+                              square
+                            );
                           setArrowStart(null);
                           setArrowPreview(null);
                         }
                       }
                     }}
                     onMouseEnter={() => {
-                      if (editMode === "arrow" && arrowStart) setArrowPreview(square);
+                      if (
+                        editMode === "arrow" &&
+                        arrowStart
+                      )
+                        setArrowPreview(square);
                     }}
                     onContextMenu={(e) => {
                       e.preventDefault();
@@ -481,6 +584,7 @@ function InteractiveBoard({
                       if (p) onPieceRemove(p.id);
                     }}
                   >
+                    {/* Highlight overlay */}
                     {hl && (
                       <div
                         className="pointer-events-none absolute inset-0"
@@ -490,15 +594,24 @@ function InteractiveBoard({
                         }}
                       />
                     )}
+
+                    {/* Selected piece highlight */}
+                    {isHintSource && (
+                      <div className="pointer-events-none absolute inset-0 bg-yellow-400/40" />
+                    )}
+
+                    {/* Piece */}
                     {piece && (
                       <span
                         draggable
                         onDragStart={(e) => {
-                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.effectAllowed =
+                            "move";
                           setDragItem({
                             side: piece.side,
                             type: piece.type,
-                            sourceSquare: piece.square,
+                            sourceSquare:
+                              piece.square,
                             pieceId: piece.id,
                           });
                         }}
@@ -511,7 +624,11 @@ function InteractiveBoard({
                               : "drop-shadow(0 1px 2px rgba(0,0,0,0.3))",
                         }}
                       >
-                        {pieceSymbols[piece.side][piece.type]}
+                        {
+                          pieceSymbols[piece.side][
+                            piece.type
+                          ]
+                        }
                       </span>
                     )}
                   </div>
@@ -520,10 +637,13 @@ function InteractiveBoard({
             )}
           </div>
 
+          {/* Move hint dots */}
           <div className="pointer-events-none absolute inset-0">
             {moveHints.map((square) => {
               const pos = squareToHintPosition(square);
-              const isCapture = pieces.some((p) => p.square === square);
+              const isCapture = pieces.some(
+                (p) => p.square === square
+              );
               return (
                 <div
                   key={`hint-${square}`}
@@ -532,12 +652,16 @@ function InteractiveBoard({
                       ? "h-[34px] w-[34px] border-[5px] border-black/30 bg-transparent"
                       : "h-3 w-3 bg-black/30"
                   }`}
-                  style={{ left: pos.left, top: pos.top }}
+                  style={{
+                    left: pos.left,
+                    top: pos.top,
+                  }}
                 />
               );
             })}
           </div>
 
+          {/* Arrow overlay */}
           <svg
             viewBox="0 0 200 200"
             className="pointer-events-none absolute inset-0 z-20 h-full w-full"
@@ -551,6 +675,8 @@ function InteractiveBoard({
             ))}
           </svg>
         </div>
+
+        {/* Rank labels right */}
         <div className="flex flex-col">
           {ranks.map((r) => (
             <div
@@ -563,6 +689,7 @@ function InteractiveBoard({
           ))}
         </div>
       </div>
+      {/* File labels bottom */}
       <div className="flex" style={{ paddingLeft: 18 }}>
         {files.map((f) => (
           <div
@@ -578,9 +705,20 @@ function InteractiveBoard({
   );
 }
 
+// ─── Helpers ───────────────────────────────────────────────────────────
+
 function createStartingPosition(): Piece[] {
   const p: Piece[] = [];
-  const backRank: PieceType[] = ["rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook"];
+  const backRank: PieceType[] = [
+    "rook",
+    "knight",
+    "bishop",
+    "queen",
+    "king",
+    "bishop",
+    "knight",
+    "rook",
+  ];
   for (let i = 0; i < 8; i++) {
     p.push({
       id: uid(),
@@ -639,6 +777,55 @@ function stringifyTableGrid(grid: string[][]) {
     .join("\n");
 }
 
+// ─── SVG Board as standalone (for export) ──────────────────────────────
+
+function generateStandaloneSVG(sec: SectionData): string {
+  const lightRects = lightSquarePositions
+    .map(
+      (sq) =>
+        `<rect width="${svgSqSize}" height="${svgSqSize}" x="${sq.x}" y="${sq.y}"/>`
+    )
+    .join("");
+
+  const hlRects = sec.highlights
+    .map((h) => {
+      const { x, y } = squareToCoordSVG(h.square);
+      return `<rect x="${x}" y="${y}" width="${svgSqSize}" height="${svgSqSize}" fill="${h.color}" fill-opacity="${h.opacity}"/>`;
+    })
+    .join("\n");
+
+  const pieceTexts = sec.pieces
+    .map((p) => {
+      const { centerX, centerY } = squareToCoordSVG(
+        p.square
+      );
+      return `<text x="${centerX}" y="${centerY}" font-size="20" fill="${p.side === "white" ? "white" : "black"}" text-anchor="middle" dominant-baseline="central">${pieceSymbols[p.side][p.type]}</text>`;
+    })
+    .join("\n");
+
+  const arrowPolygons = sec.arrows
+    .map((a) => {
+      const { points, rotation, cx, cy } =
+        computeArrowPolygon(a.from, a.to);
+      return `<polygon id="arrow-${a.from}${a.to}" transform="rotate(${rotation.toFixed(2)} ${cx.toFixed(2)} ${cy.toFixed(2)})" points="${points}" style="fill:${a.color};opacity:${a.opacity};"/>`;
+    })
+    .join("\n");
+
+  return [
+    `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">`,
+    `<rect width="200" height="200" fill="#769656"/>`,
+    `<g fill="#eeeed2">${lightRects}</g>`,
+    hlRects,
+    pieceTexts,
+    arrowPolygons,
+    `</svg>`,
+  ]
+    .filter((s) => s.trim() !== "")
+    .join("\n");
+}
+
+// ─── Main App ──────────────────────────────────────────────────────────
+
 export default function App() {
   const [sections, setSections] = useState<SectionData[]>([
     {
@@ -679,11 +866,14 @@ export default function App() {
   ]);
 
   const [activeSectionId, setActiveSectionId] = useState(1);
-  const [highlightColor, setHighlightColor] = useState("#facc15");
-  const [highlightOpacity, setHighlightOpacity] = useState(0.45);
+  const [highlightColor, setHighlightColor] =
+    useState("#facc15");
+  const [highlightOpacity, setHighlightOpacity] =
+    useState(0.45);
   const [arrowColor, setArrowColor] = useState("#ffaa00");
   const [arrowOpacity, setArrowOpacity] = useState(0.8);
-  const [dragItem, setDragItem] = useState<DragItem | null>(null);
+  const [dragItem, setDragItem] =
+    useState<DragItem | null>(null);
   const [editMode, setEditMode] = useState<
     "piece" | "highlight" | "arrow"
   >("piece");
@@ -692,6 +882,7 @@ export default function App() {
   >("pretty");
   const [statusMessage, setStatusMessage] = useState("");
   const [copied, setCopied] = useState(false);
+  const [isZipping, setIsZipping] = useState(false);
 
   const activeSection = sections.find(
     (s) => s.id === activeSectionId
@@ -702,7 +893,9 @@ export default function App() {
     updates: Partial<SectionData>
   ) {
     setSections((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
+      prev.map((s) =>
+        s.id === id ? { ...s, ...updates } : s
+      )
     );
   }
 
@@ -720,11 +913,12 @@ export default function App() {
       setStatusMessage("Minimal harus ada 1 bagian");
       return;
     }
-    setSections((prev) => prev.filter((s) => s.id !== id));
+    const remaining = sections.filter(
+      (s) => s.id !== id
+    );
+    setSections(remaining);
     if (activeSectionId === id)
-      setActiveSectionId(
-        sections.find((s) => s.id !== id)!.id
-      );
+      setActiveSectionId(remaining[0].id);
     setStatusMessage("Bagian dihapus");
   }
 
@@ -738,12 +932,18 @@ export default function App() {
         ...src,
         id: newId,
         sectionNumber: String(sections.length + 1),
-        pieces: src.pieces.map((p) => ({ ...p, id: uid() })),
+        pieces: src.pieces.map((p) => ({
+          ...p,
+          id: uid(),
+        })),
         highlights: src.highlights.map((h) => ({
           ...h,
           id: uid(),
         })),
-        arrows: src.arrows.map((a) => ({ ...a, id: uid() })),
+        arrows: src.arrows.map((a) => ({
+          ...a,
+          id: uid(),
+        })),
         moveHints: [...src.moveHints],
       },
     ]);
@@ -751,29 +951,37 @@ export default function App() {
     setStatusMessage("Bagian diduplikasi");
   }
 
+  // ─── Board Handlers ─────────────────────────────────────────────────
+
   function handlePieceDrop(
     side: PieceSide,
     type: PieceType,
     square: string
   ) {
+    const prev = activeSection.pieces;
+    const idx = prev.findIndex(
+      (p) => p.square === square
+    );
+    let nextPieces: Piece[];
+    if (idx >= 0) {
+      nextPieces = [...prev];
+      nextPieces[idx] = {
+        ...nextPieces[idx],
+        side,
+        type,
+      };
+    } else {
+      nextPieces = [
+        ...prev,
+        { id: uid(), square, side, type },
+      ];
+    }
     updateSection(activeSectionId, {
-      pieces: (() => {
-        const prev = activeSection.pieces;
-        const idx = prev.findIndex((p) => p.square === square);
-        if (idx >= 0) {
-          const next = [...prev];
-          next[idx] = { ...next[idx], side, type };
-          return next;
-        }
-        return [
-          ...prev,
-          { id: uid(), square, side, type },
-        ];
-      })(),
+      pieces: nextPieces,
       moveHints: [],
       hintSourceSquare: null,
     });
-    setStatusMessage(`${side} ${type} -> ${square}`);
+    setStatusMessage(`${side} ${type} → ${square}`);
   }
 
   function handlePieceMove(
@@ -791,7 +999,7 @@ export default function App() {
       moveHints: [],
       hintSourceSquare: null,
     });
-    setStatusMessage(`Bidak -> ${newSquare}`);
+    setStatusMessage(`Bidak → ${newSquare}`);
   }
 
   function handlePieceRemove(pieceId: number) {
@@ -807,7 +1015,9 @@ export default function App() {
 
   function handleHighlightToggle(square: string) {
     const prev = activeSection.highlights;
-    const idx = prev.findIndex((h) => h.square === square);
+    const idx = prev.findIndex(
+      (h) => h.square === square
+    );
     updateSection(activeSectionId, {
       highlights:
         idx >= 0
@@ -881,6 +1091,8 @@ export default function App() {
     );
   }
 
+  // ─── Code Generation ────────────────────────────────────────────────
+
   function generateSVG(sec: SectionData) {
     const lightRects = lightSquarePositions
       .map(
@@ -936,10 +1148,10 @@ export default function App() {
         const isCapture = sec.pieces.some(
           (p) => p.square === square
         );
-        const size = isCapture
-          ? "width:27.5px;height:27.5px;border:4px solid rgba(0,0,0,0.3);background:transparent;border-radius:9999px;"
-          : "width:14px;height:14px;";
-        return `                    <div class="hint" style="left:${pos.left};top:${pos.top};${size}"></div>`;
+        const style = isCapture
+          ? `left:${pos.left};top:${pos.top};width:27.5px;height:27.5px;border:4px solid rgba(0,0,0,0.3);background:transparent;border-radius:9999px;`
+          : `left:${pos.left};top:${pos.top};`;
+        return `                    <div class="hint" style="${style}"></div>`;
       })
       .join("\n");
 
@@ -965,25 +1177,24 @@ export default function App() {
           `<th class="border border-gray-300 px-3 py-2 text-left">${escapeHtml(h)}</th>`
       )
       .join("");
-    const thead = `                        <thead class="bg-gray-100"><tr>${thCells}</tr></thead>`;
 
-    const tbody = bodyRows
+    const tbodyRows = bodyRows
       .map((row) => {
-        const tdCells = row
+        const cells = row
           .map(
             (cell) =>
               `<td class="border border-gray-300 px-3 py-2">${escapeHtml(cell)}</td>`
           )
           .join("");
-        return `                            <tr>${tdCells}</tr>`;
+        return `                            <tr>${cells}</tr>`;
       })
       .join("\n");
 
     return [
       `                    <table class="w-full text-left text-sm text-gray-700 border border-gray-300">`,
-      thead,
+      `                        <thead class="bg-gray-100"><tr>${thCells}</tr></thead>`,
       `                        <tbody>`,
-      tbody,
+      tbodyRows,
       `                        </tbody>`,
       `                    </table>`,
     ].join("\n");
@@ -1005,12 +1216,6 @@ export default function App() {
           sec.boardPlacement === "left"
             ? "md:flex-row-reverse"
             : "md:flex-row";
-
-        const contentBlock = [
-          `                    <p class="text-gray-600 leading-relaxed text-sm">`,
-          `                        ${movHtml}`,
-          `                    </p>`,
-        ].join("\n");
 
         let sidePanelBlock = "";
         if (sec.showBoardPanel) {
@@ -1049,7 +1254,9 @@ export default function App() {
           `            <div class="flex flex-col ${flexDir} gap-8 mb-10">`,
           `                <div class="flex-1">`,
           `                    <h3 class="text-2xl font-extrabold text-chess-green uppercase mb-3 leading-tight">${escapeHtml(sec.movementTitle)}</h3>`,
-          contentBlock,
+          `                    <p class="text-gray-600 leading-relaxed text-sm">`,
+          `                        ${movHtml}`,
+          `                    </p>`,
           `                </div>`,
           ``,
           sidePanelBlock,
@@ -1068,43 +1275,16 @@ export default function App() {
       `    <script src="https://cdn.tailwindcss.com"><\/script>`,
       `    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800&display=swap" rel="stylesheet">`,
       `    <style>`,
-      `        body {`,
-      `            font-family: 'Nunito', sans-serif;`,
-      `            background-color: #f1f1f1;`,
-      `            color: #312e2b;`,
-      `        }`,
+      `        body { font-family: 'Nunito', sans-serif; background-color: #f1f1f1; color: #312e2b; }`,
       `        .header-bg { background-color: #81b64c; }`,
-      `        .section-number {`,
-      `            background-color: #81b64c;`,
-      `            color: white;`,
-      `            padding: 2px 10px;`,
-      `            border-radius: 4px;`,
-      `            font-weight: 800;`,
-      `        }`,
+      `        .section-number { background-color: #81b64c; color: white; padding: 2px 10px; border-radius: 4px; font-weight: 800; }`,
       `        .text-chess-green { color: #81b64c; }`,
-      `        .board-container {`,
-      `            width: 220px;`,
-      `            height: 220px;`,
-      `            flex-shrink: 0;`,
-      `            position: relative;`,
-      `        }`,
-      `        .hint-layer {`,
-      `            position: absolute;`,
-      `            inset: 0;`,
-      `            pointer-events: none;`,
-      `        }`,
-      `        .hint {`,
-      `            position: absolute;`,
-      `            width: 14px;`,
-      `            height: 14px;`,
-      `            border-radius: 9999px;`,
-      `            transform: translate(-50%, -50%);`,
-      `            background: rgba(0, 0, 0, 0.3);`,
-      `        }`,
+      `        .board-container { width: 220px; height: 220px; flex-shrink: 0; position: relative; }`,
+      `        .hint-layer { position: absolute; inset: 0; pointer-events: none; }`,
+      `        .hint { position: absolute; width: 14px; height: 14px; border-radius: 9999px; transform: translate(-50%, -50%); background: rgba(0,0,0,0.3); }`,
       `    </style>`,
       `</head>`,
       `<body class="p-0 m-0">`,
-      ``,
       `    <div class="max-w-4xl mx-auto bg-white shadow-xl min-h-screen">`,
       `        <header class="header-bg p-6 flex justify-between items-center text-white">`,
       `            <div class="flex items-center gap-2">`,
@@ -1119,12 +1299,10 @@ export default function App() {
       `                <p class="text-5xl font-extrabold uppercase leading-none mt-1">Bermain Catur</p>`,
       `            </div>`,
       `        </header>`,
-      ``,
       `        <main class="p-8">`,
       sectionBlocks,
       `        </main>`,
       `    </div>`,
-      ``,
       `</body>`,
       `</html>`,
     ].join("\n");
@@ -1158,7 +1336,11 @@ export default function App() {
   ) {
     const r = Math.max(1, nextRows);
     const c = Math.max(1, nextCols);
-    const nextGrid = resizeTableGrid(editorTableGrid, r, c);
+    const nextGrid = resizeTableGrid(
+      editorTableGrid,
+      r,
+      c
+    );
     updateSection(activeSectionId, {
       tableRowCount: r,
       tableColumnCount: c,
@@ -1191,53 +1373,298 @@ export default function App() {
     }
   }
 
+  async function downloadZipProject() {
+    setIsZipping(true);
+    try {
+      const zip = new JSZip();
+      const root = zip.folder("chess-article-project");
+      if (!root) throw new Error("Gagal membuat folder");
+
+      // Main HTML article
+      root.file("index.html", generatedCode);
+
+      // Individual SVG files for each section
+      const svgFolder = root.folder("boards");
+      sections.forEach((sec) => {
+        if (
+          sec.showBoardPanel &&
+          !sec.showPieceValueTable
+        ) {
+          const svgContent =
+            generateStandaloneSVG(sec);
+          svgFolder?.file(
+            `board-section-${sec.sectionNumber}.svg`,
+            svgContent
+          );
+        }
+      });
+
+      // Project config
+      const packageJson = {
+        name: "chess-article",
+        private: true,
+        version: "1.0.0",
+        type: "module",
+        scripts: {
+          dev: "vite",
+          build: "vite build",
+          preview: "vite preview",
+        },
+        dependencies: {
+          react: "^19.0.0",
+          "react-dom": "^19.0.0",
+        },
+        devDependencies: {
+          typescript: "^5.0.0",
+          vite: "^6.0.0",
+          "@vitejs/plugin-react": "^4.0.0",
+          tailwindcss: "^4.0.0",
+          "@tailwindcss/vite": "^4.0.0",
+        },
+      };
+
+      root.file(
+        "package.json",
+        JSON.stringify(packageJson, null, 2)
+      );
+      root.file(
+        ".gitignore",
+        [
+          "node_modules",
+          "dist",
+          ".DS_Store",
+          "*.log",
+        ].join("\n")
+      );
+      root.file(
+        "README.md",
+        [
+          "# Chess Article Project",
+          "",
+          `Generated with ${sections.length} section(s).`,
+          "",
+          "## Quick Start",
+          "```bash",
+          "npm install",
+          "npm run dev",
+          "```",
+          "",
+          "## Files",
+          "- `index.html` — Full article HTML",
+          "- `boards/` — Individual SVG board files",
+          "- `src/` — React source (wraps article in iframe)",
+        ].join("\n")
+      );
+
+      root.file(
+        "vite.config.ts",
+        [
+          'import { defineConfig } from "vite";',
+          'import react from "@vitejs/plugin-react";',
+          'import tailwindcss from "@tailwindcss/vite";',
+          "",
+          "export default defineConfig({",
+          "  plugins: [react(), tailwindcss()],",
+          "});",
+        ].join("\n")
+      );
+
+      root.file(
+        "tsconfig.json",
+        JSON.stringify(
+          {
+            compilerOptions: {
+              target: "ES2020",
+              useDefineForClassFields: true,
+              lib: [
+                "ES2020",
+                "DOM",
+                "DOM.Iterable",
+              ],
+              module: "ESNext",
+              skipLibCheck: true,
+              moduleResolution: "Bundler",
+              allowImportingTsExtensions: true,
+              resolveJsonModule: true,
+              isolatedModules: true,
+              noEmit: true,
+              jsx: "react-jsx",
+              strict: true,
+            },
+            include: ["src"],
+          },
+          null,
+          2
+        )
+      );
+
+      // Public folder with article
+      const publicFolder = root.folder("public");
+      publicFolder?.file(
+        "chess-article.html",
+        generatedCode
+      );
+
+      // Source files
+      const srcFolder = root.folder("src");
+      srcFolder?.file(
+        "index.css",
+        '@import "tailwindcss";\n'
+      );
+      srcFolder?.file(
+        "main.tsx",
+        [
+          'import { StrictMode } from "react";',
+          'import { createRoot } from "react-dom/client";',
+          'import "./index.css";',
+          'import App from "./App";',
+          "",
+          'createRoot(document.getElementById("root")!).render(',
+          "  <StrictMode>",
+          "    <App />",
+          "  </StrictMode>",
+          ");",
+        ].join("\n")
+      );
+      srcFolder?.file(
+        "App.tsx",
+        [
+          "export default function App() {",
+          "  return (",
+          '    <div className="min-h-screen bg-gray-100">',
+          '      <iframe',
+          '        title="Chess Article"',
+          '        src="/chess-article.html"',
+          '        className="mx-auto block h-screen w-full max-w-4xl border-0"',
+          "      />",
+          "    </div>",
+          "  );",
+          "}",
+        ].join("\n")
+      );
+
+      // Entrypoint HTML
+      root.file(
+        "index-dev.html",
+        [
+          "<!doctype html>",
+          '<html lang="id">',
+          "  <head>",
+          '    <meta charset="UTF-8" />',
+          '    <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
+          "    <title>Chess Article Viewer</title>",
+          "  </head>",
+          "  <body>",
+          '    <div id="root"></div>',
+          '    <script type="module" src="/src/main.tsx"></script>',
+          "  </body>",
+          "</html>",
+        ].join("\n")
+      );
+
+      // JSON data export (for reimport later)
+      root.file(
+        "article-data.json",
+        JSON.stringify(
+          {
+            exportedAt: new Date().toISOString(),
+            sections: sections.map((s) => ({
+              ...s,
+              // strip runtime-only fields
+              moveHints: [],
+              hintSourceSquare: null,
+            })),
+          },
+          null,
+          2
+        )
+      );
+
+      const blob = await zip.generateAsync({
+        type: "blob",
+      });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "chess-article-project.zip";
+      link.click();
+      URL.revokeObjectURL(link.href);
+      setStatusMessage("ZIP berhasil di-download!");
+    } catch (err) {
+      setStatusMessage(
+        `Gagal membuat ZIP: ${err instanceof Error ? err.message : "Unknown error"}`
+      );
+    } finally {
+      setIsZipping(false);
+    }
+  }
+
   const movementItems = activeSection.movementText
     .split("\n")
     .map((l) => l.trim())
     .filter(Boolean);
 
+  // ─── Render ──────────────────────────────────────────────────────────
+
   return (
     <main className="min-h-screen bg-stone-100 px-3 py-6 text-slate-900 md:px-6">
       <div className="mx-auto w-full max-w-7xl space-y-5">
+        {/* ── Header ──────────────────────────────────── */}
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black uppercase tracking-tight text-[#2f5f2a] md:text-4xl">
-              Chess Article Builder
+              ♟ Chess Article Builder
             </h1>
             <p className="mt-1 max-w-2xl text-xs text-slate-500 md:text-sm">
-              Buat artikel catur bergaya Chess.com - drag-drop
-              bidak, highlight, panah polygon, hint langkah,
-              tabel. Output HTML lengkap.
+              Buat artikel catur bergaya Chess.com —
+              drag-drop, highlight, panah, hint langkah,
+              tabel. Output HTML + ZIP.
             </p>
           </div>
-          <button
-            onClick={copyCode}
-            className={`shrink-0 rounded-lg px-4 py-2 text-sm font-bold text-white shadow transition ${
-              copied
-                ? "bg-emerald-600"
-                : "bg-[#81b64c] hover:bg-[#6da03d]"
-            }`}
-          >
-            {copied ? "Tersalin" : "Copy Full HTML"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={downloadZipProject}
+              disabled={isZipping}
+              className="shrink-0 rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-white shadow transition hover:bg-slate-700 disabled:opacity-60"
+            >
+              {isZipping
+                ? "⏳ Membuat ZIP..."
+                : "📦 Download ZIP"}
+            </button>
+            <button
+              onClick={copyCode}
+              className={`shrink-0 rounded-lg px-4 py-2 text-sm font-bold text-white shadow transition ${
+                copied
+                  ? "bg-emerald-600"
+                  : "bg-[#81b64c] hover:bg-[#6da03d]"
+              }`}
+            >
+              {copied
+                ? "✓ Tersalin!"
+                : "📋 Copy Full HTML"}
+            </button>
+          </div>
         </header>
 
+        {/* ── Section Tabs ────────────────────────────── */}
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-300 bg-white p-2.5 shadow-sm">
           <span className="text-xs font-bold uppercase text-slate-400">
             Bagian:
           </span>
-          {sections.map((sec) => (
+          {sections.map((sec, idx) => (
             <button
               key={sec.id}
-              onClick={() => setActiveSectionId(sec.id)}
+              onClick={() =>
+                setActiveSectionId(sec.id)
+              }
               className={`rounded px-3 py-1.5 text-xs font-bold transition ${
                 activeSectionId === sec.id
                   ? "bg-[#81b64c] text-white shadow"
                   : "bg-stone-100 text-slate-600 hover:bg-stone-200"
               }`}
             >
-              {sec.sectionNumber}. {sec.sectionTitle.substring(0, 18)}
-              {sec.sectionTitle.length > 18 ? "..." : ""}
+              {sec.sectionNumber}.{" "}
+              {sec.sectionTitle.substring(0, 18)}
+              {sec.sectionTitle.length > 18 ? "…" : ""}
             </button>
           ))}
           <button
@@ -1248,11 +1675,14 @@ export default function App() {
           </button>
         </div>
 
+        {/* ── Editor + Board ──────────────────────────── */}
         <section className="grid gap-5 lg:grid-cols-[1fr_auto]">
+          {/* Left: Editor */}
           <div className="space-y-3 rounded-lg border border-stone-300 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400">
-                Editor - Bagian {activeSection.sectionNumber}
+                Editor — Bagian{" "}
+                {activeSection.sectionNumber}
               </h2>
               <div className="flex gap-1.5">
                 <button
@@ -1261,7 +1691,7 @@ export default function App() {
                   }
                   className="rounded bg-stone-100 px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-stone-200"
                 >
-                  Duplikasi
+                  ⧉ Duplikasi
                 </button>
                 <button
                   onClick={() =>
@@ -1269,11 +1699,12 @@ export default function App() {
                   }
                   className="rounded bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-500 hover:bg-red-100"
                 >
-                  Hapus
+                  🗑 Hapus
                 </button>
               </div>
             </div>
 
+            {/* Form */}
             <div className="grid gap-3 md:grid-cols-2">
               <label className="block space-y-1">
                 <span className="text-[11px] font-bold text-slate-500">
@@ -1346,7 +1777,7 @@ export default function App() {
                       ? "text-only"
                       : activeSection.showPieceValueTable
                         ? activeSection.boardPlacement ===
-                            "left"
+                          "left"
                           ? "table-left"
                           : "table-right"
                         : activeSection.boardPlacement ===
@@ -1357,49 +1788,58 @@ export default function App() {
                   onChange={(e) => {
                     const v = e.target.value;
                     if (v === "text-only") {
-                      updateSection(activeSectionId, {
-                        showBoardPanel: false,
-                        showPieceValueTable: false,
-                      });
+                      updateSection(
+                        activeSectionId,
+                        {
+                          showBoardPanel: false,
+                          showPieceValueTable: false,
+                        }
+                      );
                     } else if (
                       v === "board-left" ||
                       v === "board-right"
                     ) {
-                      updateSection(activeSectionId, {
-                        showBoardPanel: true,
-                        showPieceValueTable: false,
-                        boardPlacement:
-                          v === "board-left"
-                            ? "left"
-                            : "right",
-                      });
+                      updateSection(
+                        activeSectionId,
+                        {
+                          showBoardPanel: true,
+                          showPieceValueTable: false,
+                          boardPlacement:
+                            v === "board-left"
+                              ? "left"
+                              : "right",
+                        }
+                      );
                     } else {
-                      updateSection(activeSectionId, {
-                        showBoardPanel: true,
-                        showPieceValueTable: true,
-                        boardPlacement:
-                          v === "table-left"
-                            ? "left"
-                            : "right",
-                      });
+                      updateSection(
+                        activeSectionId,
+                        {
+                          showBoardPanel: true,
+                          showPieceValueTable: true,
+                          boardPlacement:
+                            v === "table-left"
+                              ? "left"
+                              : "right",
+                        }
+                      );
                     }
                   }}
                   className="w-full rounded border border-stone-300 px-2.5 py-1.5 text-sm outline-none focus:border-[#81b64c]"
                 >
                   <option value="board-right">
-                    Teks kiri, Papan kanan
+                    📋 Teks kiri, Papan kanan
                   </option>
                   <option value="board-left">
-                    Papan kiri, Teks kanan
+                    Papan kiri, Teks kanan 📋
                   </option>
                   <option value="table-right">
-                    Teks kiri, Tabel kanan
+                    📋 Teks kiri, Tabel kanan
                   </option>
                   <option value="table-left">
-                    Tabel kiri, Teks kanan
+                    Tabel kiri, Teks kanan 📋
                   </option>
                   <option value="text-only">
-                    Tanpa Panel (Hanya Teks)
+                    Tanpa Panel
                   </option>
                 </select>
               </label>
@@ -1424,6 +1864,7 @@ export default function App() {
               />
             </label>
 
+            {/* Edit Mode */}
             <div className="border-t border-stone-200 pt-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[10px] font-bold uppercase text-slate-400">
@@ -1446,10 +1887,10 @@ export default function App() {
                     }`}
                   >
                     {mode === "piece"
-                      ? "Bidak"
+                      ? "🧩 Bidak"
                       : mode === "highlight"
-                        ? "Highlight"
-                        : "Panah"}
+                        ? "🟨 Highlight"
+                        : "➡️ Panah"}
                   </button>
                 ))}
               </div>
@@ -1463,7 +1904,9 @@ export default function App() {
                     type="color"
                     value={highlightColor}
                     onChange={(e) =>
-                      setHighlightColor(e.target.value)
+                      setHighlightColor(
+                        e.target.value
+                      )
                     }
                     className="h-6 w-8 cursor-pointer border border-stone-300 p-0.5"
                   />
@@ -1518,19 +1961,21 @@ export default function App() {
                     className="w-14 rounded border border-stone-300 px-1.5 py-0.5 text-[11px]"
                   />
                   <span className="text-slate-400">
-                    Klik asal -&gt; klik tujuan
+                    Klik asal → klik tujuan
                   </span>
                 </div>
               )}
               {editMode === "piece" && (
                 <p className="mt-2 rounded bg-green-50 p-2 text-[11px] text-slate-500">
-                  Tarik dari baki -&gt; papan. Tarik di papan
-                  -&gt; pindah. <strong>Klik kanan</strong> -&gt;
-                  hapus. Klik bidak = hint langkah.
+                  Tarik dari baki → papan. Tarik di papan
+                  → pindah.{" "}
+                  <strong>Klik kanan</strong> → hapus.
+                  Klik bidak = hint langkah.
                 </p>
               )}
             </div>
 
+            {/* Quick Buttons */}
             <div className="flex flex-wrap gap-1.5">
               <button
                 onClick={() => {
@@ -1539,11 +1984,13 @@ export default function App() {
                     moveHints: [],
                     hintSourceSquare: null,
                   });
-                  setStatusMessage("Posisi awal dimuat");
+                  setStatusMessage(
+                    "Posisi awal dimuat"
+                  );
                 }}
                 className="rounded border border-[#81b64c] bg-green-50 px-2 py-1 text-[10px] font-bold text-[#81b64c] hover:bg-green-100"
               >
-                Posisi Awal
+                ♟ Posisi Awal
               </button>
               <button
                 onClick={() => {
@@ -1558,7 +2005,7 @@ export default function App() {
                 }}
                 className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-500 hover:bg-red-100"
               >
-                Hapus Semua
+                🗑 Hapus Semua
               </button>
               <button
                 onClick={() =>
@@ -1605,13 +2052,17 @@ export default function App() {
               </button>
             </div>
 
+            {/* Summary Lists */}
             <div className="grid gap-2 text-[11px] text-slate-500 md:grid-cols-3">
               <div>
                 <p className="font-bold text-slate-700">
-                  Bidak ({activeSection.pieces.length})
+                  Bidak (
+                  {activeSection.pieces.length})
                 </p>
                 {activeSection.pieces.length === 0 && (
-                  <p className="italic text-slate-400">-</p>
+                  <p className="italic text-slate-400">
+                    —
+                  </p>
                 )}
                 <div className="max-h-24 overflow-y-auto">
                   {activeSection.pieces.map((p) => (
@@ -1620,7 +2071,11 @@ export default function App() {
                       className="flex items-center justify-between border-b border-stone-100 py-px"
                     >
                       <span>
-                        {pieceSymbols[p.side][p.type]}{" "}
+                        {
+                          pieceSymbols[p.side][
+                            p.type
+                          ]
+                        }{" "}
                         <span className="font-mono">
                           {p.square}
                         </span>
@@ -1631,7 +2086,7 @@ export default function App() {
                         }
                         className="text-red-400 hover:text-red-600"
                       >
-                        x
+                        ✕
                       </button>
                     </div>
                   ))}
@@ -1642,49 +2097,61 @@ export default function App() {
                   Highlight (
                   {activeSection.highlights.length})
                 </p>
-                {activeSection.highlights.length === 0 && (
-                  <p className="italic text-slate-400">-</p>
+                {activeSection.highlights.length ===
+                  0 && (
+                  <p className="italic text-slate-400">
+                    —
+                  </p>
                 )}
                 <div className="max-h-24 overflow-y-auto">
-                  {activeSection.highlights.map((h) => (
-                    <div
-                      key={h.id}
-                      className="flex items-center justify-between border-b border-stone-100 py-px"
-                    >
-                      <span className="flex items-center gap-1">
-                        <span
-                          className="inline-block h-2.5 w-2.5 rounded-sm"
-                          style={{
-                            background: h.color,
-                          }}
-                        />
-                        <span className="font-mono">
-                          {h.square}
-                        </span>
-                      </span>
-                      <button
-                        onClick={() =>
-                          updateSection(activeSectionId, {
-                            highlights:
-                              activeSection.highlights.filter(
-                                (x) => x.id !== h.id
-                              ),
-                          })
-                        }
-                        className="text-red-400 hover:text-red-600"
+                  {activeSection.highlights.map(
+                    (h) => (
+                      <div
+                        key={h.id}
+                        className="flex items-center justify-between border-b border-stone-100 py-px"
                       >
-                        x
-                      </button>
-                    </div>
-                  ))}
+                        <span className="flex items-center gap-1">
+                          <span
+                            className="inline-block h-2.5 w-2.5 rounded-sm"
+                            style={{
+                              background: h.color,
+                            }}
+                          />
+                          <span className="font-mono">
+                            {h.square}
+                          </span>
+                        </span>
+                        <button
+                          onClick={() =>
+                            updateSection(
+                              activeSectionId,
+                              {
+                                highlights:
+                                  activeSection.highlights.filter(
+                                    (x) =>
+                                      x.id !== h.id
+                                  ),
+                              }
+                            )
+                          }
+                          className="text-red-400 hover:text-red-600"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    )
+                  )}
                 </div>
               </div>
               <div>
                 <p className="font-bold text-slate-700">
-                  Panah ({activeSection.arrows.length})
+                  Panah (
+                  {activeSection.arrows.length})
                 </p>
                 {activeSection.arrows.length === 0 && (
-                  <p className="italic text-slate-400">-</p>
+                  <p className="italic text-slate-400">
+                    —
+                  </p>
                 )}
                 <div className="max-h-24 overflow-y-auto">
                   {activeSection.arrows.map((a) => (
@@ -1700,21 +2167,25 @@ export default function App() {
                           }}
                         />
                         <span className="font-mono">
-                          {a.from}-&gt;{a.to}
+                          {a.from}→{a.to}
                         </span>
                       </span>
                       <button
                         onClick={() =>
-                          updateSection(activeSectionId, {
-                            arrows:
-                              activeSection.arrows.filter(
-                                (x) => x.id !== a.id
-                              ),
-                          })
+                          updateSection(
+                            activeSectionId,
+                            {
+                              arrows:
+                                activeSection.arrows.filter(
+                                  (x) =>
+                                    x.id !== a.id
+                                ),
+                            }
+                          )
                         }
                         className="text-red-400 hover:text-red-600"
                       >
-                        x
+                        ✕
                       </button>
                     </div>
                   ))}
@@ -1729,6 +2200,7 @@ export default function App() {
             )}
           </div>
 
+          {/* Right: Board + Trays */}
           <div className="flex w-[380px] max-w-full flex-col items-center gap-2 rounded-lg border border-stone-300 bg-white p-4 shadow-sm">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
               Bidak Hitam
@@ -1762,6 +2234,7 @@ export default function App() {
               Bidak Putih
             </p>
 
+            {/* Table Editor (when table mode) */}
             {activeSection.showBoardPanel &&
               activeSection.showPieceValueTable && (
                 <div className="w-full space-y-2 border-t border-stone-200 pt-3">
@@ -1783,7 +2256,9 @@ export default function App() {
                         onChange={(e) =>
                           updateTableShape(
                             activeSection.tableRowCount,
-                            Number(e.target.value) || 1
+                            Number(
+                              e.target.value
+                            ) || 1
                           )
                         }
                         className="w-full rounded border border-stone-300 px-2 py-1.5 text-sm outline-none focus:border-[#81b64c]"
@@ -1797,10 +2272,14 @@ export default function App() {
                         type="number"
                         min={1}
                         max={20}
-                        value={activeSection.tableRowCount}
+                        value={
+                          activeSection.tableRowCount
+                        }
                         onChange={(e) =>
                           updateTableShape(
-                            Number(e.target.value) || 1,
+                            Number(
+                              e.target.value
+                            ) || 1,
                             activeSection.tableColumnCount
                           )
                         }
@@ -1808,40 +2287,48 @@ export default function App() {
                       />
                     </label>
                   </div>
-                  <div className="max-h-64 w-full max-w-[356px] overflow-auto rounded border border-stone-300">
+                  <div className="max-h-64 w-full overflow-auto rounded border border-stone-300">
                     <table className="min-w-max border-collapse text-xs">
                       <tbody>
                         {editorTableGrid.map(
                           (row, rowIdx) => (
-                            <tr key={`erow-${rowIdx}`}>
+                            <tr
+                              key={`erow-${rowIdx}`}
+                            >
                               <td className="w-6 border border-stone-200 bg-stone-50 px-1 py-0.5 text-center text-[9px] font-bold text-slate-400">
                                 {rowIdx === 0
                                   ? "H"
                                   : rowIdx}
                               </td>
-                              {row.map((cell, colIdx) => (
-                                <td
-                                  key={`ecell-${rowIdx}-${colIdx}`}
-                                  className="border border-stone-300 p-0.5"
-                                >
-                                  <input
-                                    value={cell}
-                                    onChange={(e) =>
-                                      updateTableCell(
-                                        rowIdx,
-                                        colIdx,
-                                        e.target.value
-                                      )
-                                    }
-                                    className="w-full border-0 bg-transparent px-1 py-1 text-xs outline-none"
-                                    placeholder={
-                                      rowIdx === 0
-                                        ? `Header ${colIdx + 1}`
-                                        : ""
-                                    }
-                                  />
-                                </td>
-                              ))}
+                              {row.map(
+                                (cell, colIdx) => (
+                                  <td
+                                    key={`ecell-${rowIdx}-${colIdx}`}
+                                    className="border border-stone-300 p-0.5"
+                                  >
+                                    <input
+                                      value={cell}
+                                      onChange={(
+                                        e
+                                      ) =>
+                                        updateTableCell(
+                                          rowIdx,
+                                          colIdx,
+                                          e.target
+                                            .value
+                                        )
+                                      }
+                                      className="w-full min-w-[60px] border-0 bg-transparent px-1 py-1 text-xs outline-none"
+                                      placeholder={
+                                        rowIdx ===
+                                        0
+                                          ? `Header ${colIdx + 1}`
+                                          : ""
+                                      }
+                                    />
+                                  </td>
+                                )
+                              )}
                             </tr>
                           )
                         )}
@@ -1853,10 +2340,12 @@ export default function App() {
           </div>
         </section>
 
+        {/* ── Preview + Code ──────────────────────────── */}
         <section className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
+          {/* Preview */}
           <article className="overflow-hidden rounded-lg border border-stone-300 bg-white shadow-sm">
             <div className="bg-[#81b64c] px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-white">
-              Preview
+              Preview (220×220)
             </div>
             <div
               className="p-6"
@@ -1883,7 +2372,8 @@ export default function App() {
 
               <div
                 className={`flex flex-col gap-6 ${
-                  activeSection.boardPlacement === "left"
+                  activeSection.boardPlacement ===
+                  "left"
                     ? "md:flex-row-reverse"
                     : "md:flex-row"
                 }`}
@@ -1915,7 +2405,8 @@ export default function App() {
                         <thead className="bg-gray-100">
                           <tr>
                             {(
-                              editorTableGrid[0] ?? []
+                              editorTableGrid[0] ??
+                              []
                             ).map((h, i) => (
                               <th
                                 key={`ph-${i}`}
@@ -1930,15 +2421,19 @@ export default function App() {
                           {editorTableGrid
                             .slice(1)
                             .map((row, ri) => (
-                              <tr key={`pr-${ri}`}>
-                                {row.map((cell, ci) => (
-                                  <td
-                                    key={`pc-${ri}-${ci}`}
-                                    className="border border-gray-300 px-2 py-1.5"
-                                  >
-                                    {cell}
-                                  </td>
-                                ))}
+                              <tr
+                                key={`pr-${ri}`}
+                              >
+                                {row.map(
+                                  (cell, ci) => (
+                                    <td
+                                      key={`pc-${ri}-${ci}`}
+                                      className="border border-gray-300 px-2 py-1.5"
+                                    >
+                                      {cell}
+                                    </td>
+                                  )
+                                )}
                               </tr>
                             ))}
                         </tbody>
@@ -1977,7 +2472,9 @@ export default function App() {
                         {activeSection.highlights.map(
                           (h) => {
                             const { x, y } =
-                              squareToCoordSVG(h.square);
+                              squareToCoordSVG(
+                                h.square
+                              );
                             return (
                               <rect
                                 key={h.id}
@@ -1986,53 +2483,70 @@ export default function App() {
                                 width={svgSqSize}
                                 height={svgSqSize}
                                 fill={h.color}
-                                fillOpacity={h.opacity}
+                                fillOpacity={
+                                  h.opacity
+                                }
                               />
                             );
                           }
                         )}
-                        {activeSection.pieces.map((p) => {
-                          const { centerX, centerY } =
-                            squareToCoordSVG(p.square);
-                          return (
-                            <text
-                              key={p.id}
-                              x={centerX}
-                              y={centerY}
-                              fontSize="20"
-                              fill={
-                                p.side === "white"
-                                  ? "white"
-                                  : "black"
-                              }
-                              textAnchor="middle"
-                              dominantBaseline="central"
-                            >
-                              {
-                                pieceSymbols[p.side][
-                                  p.type
-                                ]
-                              }
-                            </text>
-                          );
-                        })}
-                        {activeSection.arrows.map((a) => (
-                          <ArrowPolygonSVG
-                            key={a.id}
-                            arrow={a}
-                            idPrefix="pv"
-                          />
-                        ))}
+                        {activeSection.pieces.map(
+                          (p) => {
+                            const {
+                              centerX,
+                              centerY,
+                            } =
+                              squareToCoordSVG(
+                                p.square
+                              );
+                            return (
+                              <text
+                                key={p.id}
+                                x={centerX}
+                                y={centerY}
+                                fontSize="20"
+                                fill={
+                                  p.side ===
+                                  "white"
+                                    ? "white"
+                                    : "black"
+                                }
+                                textAnchor="middle"
+                                dominantBaseline="central"
+                              >
+                                {
+                                  pieceSymbols[
+                                    p.side
+                                  ][p.type]
+                                }
+                              </text>
+                            );
+                          }
+                        )}
+                        {activeSection.arrows.map(
+                          (a) => (
+                            <ArrowPolygonSVG
+                              key={a.id}
+                              arrow={a}
+                              idPrefix="pv"
+                            />
+                          )
+                        )}
                       </svg>
 
+                      {/* Hint dots in preview */}
                       <div className="pointer-events-none absolute inset-0">
                         {activeSection.moveHints.map(
                           (square) => {
                             const pos =
-                              squareToHintPosition(square);
+                              squareToHintPosition(
+                                square
+                              );
                             const isCapture =
                               activeSection.pieces.some(
-                                (p) => p.square === square
+                                (p) =>
+                                  p.square ===
+                                  square
                               );
                             return (
                               <div
@@ -2048,9 +2562,10 @@ export default function App() {
                                   width: isCapture
                                     ? 22
                                     : 10,
-                                  height: isCapture
-                                    ? 22
-                                    : 10,
+                                  height:
+                                    isCapture
+                                      ? 22
+                                      : 10,
                                 }}
                               />
                             );
@@ -2063,6 +2578,7 @@ export default function App() {
             </div>
           </article>
 
+          {/* Code Output */}
           <article className="flex flex-col rounded-lg border border-stone-300 bg-white shadow-sm">
             <div className="flex items-center justify-between bg-stone-800 px-4 py-2.5">
               <div className="flex items-center gap-2">
@@ -2070,7 +2586,8 @@ export default function App() {
                   HTML
                 </span>
                 <span className="text-[10px] text-stone-500">
-                  {outputCode.length.toLocaleString()} chars
+                  {outputCode.length.toLocaleString()}{" "}
+                  chars
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -2085,8 +2602,12 @@ export default function App() {
                   }
                   className="rounded border border-stone-600 bg-stone-700 px-2 py-1 text-[11px] font-semibold text-stone-200 outline-none"
                 >
-                  <option value="pretty">Pretty</option>
-                  <option value="minified">Minified</option>
+                  <option value="pretty">
+                    Pretty
+                  </option>
+                  <option value="minified">
+                    Minified
+                  </option>
                 </select>
                 <button
                   onClick={copyCode}
@@ -2096,7 +2617,7 @@ export default function App() {
                       : "bg-[#81b64c] hover:bg-[#6da03d]"
                   }`}
                 >
-                  {copied ? "Tersalin" : "Copy"}
+                  {copied ? "✓ Tersalin!" : "📋 Copy"}
                 </button>
               </div>
             </div>
