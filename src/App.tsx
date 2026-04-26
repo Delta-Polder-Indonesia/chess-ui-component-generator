@@ -71,7 +71,7 @@ export default function App() {
   const [showFenInput, setShowFenInput] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const activeSection = sections.find(s => s.id === activeSectionId)!;
+  const activeSection = sections.find(s => s.id === activeSectionId) ?? sections[0];
 
   useEffect(() => {
     if (!statusMessage) return;
@@ -124,7 +124,9 @@ export default function App() {
     const newSections = [...sections];
     const swapIdx = direction === "up" ? idx - 1 : idx + 1;
     [newSections[idx], newSections[swapIdx]] = [newSections[swapIdx], newSections[idx]];
-    setSections(newSections);
+    // Re-number sections to match new order
+    const renumbered = newSections.map((s, i) => ({ ...s, sectionNumber: String(i + 1) }));
+    setSections(renumbered);
   }, [sections]);
 
   const handlePieceDrop = useCallback((side: PieceSide, type: PieceType, square: string) => {
@@ -341,8 +343,17 @@ export default function App() {
       try {
         const data = JSON.parse(e.target?.result as string);
         if (Array.isArray(data.sections)) {
-          setSections(data.sections);
-          setActiveSectionId(data.sections[0]?.id ?? 1);
+          const migrated = data.sections.map((s: SectionData, i: number) => ({
+            ...createDefaultSection(s.id),
+            ...s,
+            sectionNumber: String(i + 1),
+            boardFlipped: s.boardFlipped ?? false,
+            boardTheme: (s.boardTheme as BoardTheme) || "green",
+            moveHints: [],
+            hintSourceSquare: null,
+          }));
+          setSections(migrated);
+          setActiveSectionId(migrated[0]?.id ?? 1);
           setStatusMessage("Data berhasil di-import");
         } else {
           setStatusMessage("Format JSON tidak valid");

@@ -11,7 +11,7 @@ export function escapeHtml(text: string) {
 }
 
 export function parseMarkdownToHtml(text: string): string {
-  return text
+  let html = text
     .replace(/```([\s\S]*?)```/g, '<pre class="bg-gray-100 p-2 rounded text-xs overflow-x-auto">$1</pre>')
     .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 py-0.5 rounded text-xs">$1</code>')
     .replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>')
@@ -19,9 +19,11 @@ export function parseMarkdownToHtml(text: string): string {
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
     .replace(/__(.+?)__/g, '<u>$1</u>')
     .replace(/^\s*-\s+(.+)$/gm, '<li>$1</li>')
-    .replace(/^\s*\d+\.\s+(.+)$/gm, '<li>$1</li>')
-    .replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul class="list-disc pl-5 space-y-1">${match}</ul>`)
-    .replace(/\n/g, '<br>');
+    .replace(/^\s*\d+\.\s+(.+)$/gm, '<li>$1</li>');
+  // Group consecutive <li> into <ul> BEFORE replacing \n with <br>
+  html = html.replace(/(<li>.*?<\/li>(?:\n|<br>)?)+/g, (match) => `<ul class="list-disc pl-5 space-y-1">${match.replace(/\n|<br>/g, '')}</ul>`);
+  html = html.replace(/\n/g, '<br>');
+  return html;
 }
 
 export function minifyHtml(html: string) {
