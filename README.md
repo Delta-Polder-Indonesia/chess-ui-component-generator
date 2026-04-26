@@ -2,12 +2,12 @@
 
 Struktur folder ini dirancang untuk menjaga proyek frontend tetap **rapi**, **mudah dipelihara**, dan **skalabel**. Dengan pembagian yang jelas, tim dapat berkolaborasi lebih efektif dan pengembangan fitur menjadi lebih cepat.
 
- ```bash
+ 
 ## 📂 Struktur Folder Proyek
-
+```bash
 frontend/
 ├──.github
-│   └── workflows/             # Github Pages
+│   └── workflows/               # Github Pages
 ├──📁 node_modules/              # Dependency hasil install npm/pnpm
 ├──📁 public/                    # File statis (favicon, index.html, dll) yang disajikan langsung
 ├──📁 src/                       # Source code utama aplikasi

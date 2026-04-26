@@ -124,34 +124,14 @@ function getPseudoLegalMoves(piece: Piece, pieces: Piece[]) {
   const occupied = new Map(pieces.map((p) => [p.square, p]));
   const results: string[] = [];
 
-  const pushIfValid = (
-    targetFile: number,
-    targetRank: number,
-    canCapture = true
-  ) => {
-    if (!isInsideBoard(targetFile, targetRank)) return;
-    const target = toSquare(targetFile, targetRank);
-    const blocker = occupied.get(target);
-    if (!blocker) {
-      results.push(target);
-      return;
-    }
-    if (canCapture && blocker.side !== piece.side) {
-      results.push(target);
-    }
-  };
-
   if (piece.type === "pawn") {
     const dir = piece.side === "white" ? 1 : -1;
     const startRank = piece.side === "white" ? 2 : 7;
     const oneStep = toSquare(fileIndex, rank + dir);
-    if (
-      isInsideBoard(fileIndex, rank + dir) &&
-      !occupied.has(oneStep)
-    ) {
+    if (isInsideBoard(fileIndex, rank + dir) && !occupied.has(oneStep)) {
       results.push(oneStep);
       const twoStep = toSquare(fileIndex, rank + dir * 2);
-      if (rank === startRank && !occupied.has(twoStep)) {
+      if (rank === startRank && isInsideBoard(fileIndex, rank + dir * 2) && !occupied.has(twoStep)) {
         results.push(twoStep);
       }
     }
@@ -162,25 +142,32 @@ function getPseudoLegalMoves(piece: Piece, pieces: Piece[]) {
       if (!isInsideBoard(d.file, d.rank)) return;
       const sq = toSquare(d.file, d.rank);
       const targetPiece = occupied.get(sq);
-      if (targetPiece && targetPiece.side !== piece.side)
-        results.push(sq);
+      if (targetPiece && targetPiece.side !== piece.side) results.push(sq);
     });
     return results;
   }
 
+  const pushIfValid = (
+    targetFile: number,
+    targetRank: number
+  ) => {
+    if (!isInsideBoard(targetFile, targetRank)) return;
+    const target = toSquare(targetFile, targetRank);
+    const blocker = occupied.get(target);
+    if (!blocker) {
+      results.push(target);
+      return;
+    }
+    if (blocker.side !== piece.side) {
+      results.push(target);
+    }
+  };
+
   if (piece.type === "knight") {
     [
-      [1, 2],
-      [2, 1],
-      [2, -1],
-      [1, -2],
-      [-1, -2],
-      [-2, -1],
-      [-2, 1],
-      [-1, 2],
-    ].forEach(([dx, dy]) =>
-      pushIfValid(fileIndex + dx, rank + dy)
-    );
+      [1, 2], [2, 1], [2, -1], [1, -2],
+      [-1, -2], [-2, -1], [-2, 1], [-1, 2],
+    ].forEach(([dx, dy]) => pushIfValid(fileIndex + dx, rank + dy));
     return results;
   }
 
@@ -243,10 +230,7 @@ function minifyHtml(html: string) {
     .trim();
 }
 
-function computeArrowPolygon(
-  fromSquare: string,
-  toSquare: string
-) {
+function computeArrowPolygon(fromSquare: string, toSquare: string) {
   const f = squareToCoordSVG(fromSquare);
   const t = squareToCoordSVG(toSquare);
   const dx = t.centerX - f.centerX;
@@ -384,6 +368,7 @@ function InteractiveBoard({
   highlights,
   arrows,
   moveHints,
+  hintSourceSquare,
   onPieceDrop,
   onPieceMove,
   onPieceRemove,
@@ -398,11 +383,8 @@ function InteractiveBoard({
   highlights: Highlight[];
   arrows: Arrow[];
   moveHints: string[];
-  onPieceDrop: (
-    side: PieceSide,
-    type: PieceType,
-    square: string
-  ) => void;
+  hintSourceSquare: string | null;
+  onPieceDrop: (side: PieceSide, type: PieceType, square: string) => void;
   onPieceMove: (pieceId: number, newSquare: string) => void;
   onPieceRemove: (pieceId: number) => void;
   dragItem: DragItem | null;
@@ -412,21 +394,24 @@ function InteractiveBoard({
   onPieceHint: (square: string) => void;
   editMode: "piece" | "highlight" | "arrow";
 }) {
-  const [hoverSquare, setHoverSquare] = useState<
-    string | null
-  >(null);
-  const [arrowStart, setArrowStart] = useState<
-    string | null
-  >(null);
-  const [arrowPreview, setArrowPreview] = useState<
-    string | null
-  >(null);
+  const [hoverSquare, setHoverSquare] = useState<string | null>(null);
+  const [arrowStart, setArrowStart] = useState<string | null>(null);
+  const [arrowPreview, setArrowPreview] = useState<string | null>(null);
 
   const getPieceAt = useCallback(
-    (square: string) =>
-      pieces.find((p) => p.square === square),
+    (square: string) => pieces.find((p) => p.square === square),
     [pieces]
   );
+
+  // Build a Set of highlight squares for O(1) lookup
+  const highlightMap = useMemo(() => {
+    const map = new Map<string, Highlight>();
+    highlights.forEach((h) => map.set(h.square, h));
+    return map;
+  }, [highlights]);
+
+  // Build a Set of hint squares for O(1) lookup
+  const hintSet = useMemo(() => new Set(moveHints), [moveHints]);
 
   return (
     <div className="inline-block select-none">
@@ -471,34 +456,19 @@ function InteractiveBoard({
           >
             {ranks.map((_, rankIdx) =>
               files.map((_, fileIdx) => {
-                const square = squareFromFileRank(
-                  fileIdx,
-                  rankIdx
-                );
-                const isLight =
-                  (rankIdx + fileIdx) % 2 === 0;
+                const square = squareFromFileRank(fileIdx, rankIdx);
+                const isLight = (rankIdx + fileIdx) % 2 === 0;
                 const piece = getPieceAt(square);
                 const isHover = hoverSquare === square;
-                const isArrowSrc =
-                  arrowStart === square;
-                const isArrowTgt =
-                  arrowPreview === square &&
-                  arrowStart !== null;
-                const hl = highlights.find(
-                  (h) => h.square === square
-                );
-                const isHintSource =
-                  moveHints.length > 0 &&
-                  piece &&
-                  pieces.find(
-                    (p) =>
-                      p.square === square &&
-                      moveHints.length > 0
-                  );
+                const isArrowSrc = arrowStart === square;
+                const isArrowTgt = arrowPreview === square && arrowStart !== null;
+                const hl = highlightMap.get(square);
+
+                // BUG FIX: Only highlight the SOURCE square of the hint, not all pieces
+                const isSelectedSource = hintSourceSquare === square;
 
                 let bg = isLight ? "#eeeed2" : "#769656";
-                if (isHover && dragItem)
-                  bg = isLight ? "#f5f5a0" : "#8aad5a";
+                if (isHover && dragItem) bg = isLight ? "#f5f5a0" : "#8aad5a";
                 if (isArrowSrc) bg = "#f87171";
                 if (isArrowTgt) bg = "#60a5fa";
 
@@ -510,72 +480,45 @@ function InteractiveBoard({
                       width: sqSize,
                       height: sqSize,
                       backgroundColor: bg,
-                      transition:
-                        "background-color 0.12s",
+                      transition: "background-color 0.12s",
                     }}
                     onDragOver={(e) => {
                       e.preventDefault();
-                      e.dataTransfer.dropEffect =
-                        "move";
+                      e.dataTransfer.dropEffect = "move";
                       setHoverSquare(square);
                     }}
-                    onDragLeave={() =>
-                      setHoverSquare(null)
-                    }
+                    onDragLeave={() => setHoverSquare(null)}
                     onDrop={(e) => {
                       e.preventDefault();
                       setHoverSquare(null);
                       if (!dragItem) return;
-                      if (
-                        dragItem.sourceSquare &&
-                        dragItem.pieceId
-                      ) {
-                        if (
-                          dragItem.sourceSquare !==
-                          square
-                        )
-                          onPieceMove(
-                            dragItem.pieceId,
-                            square
-                          );
+                      if (dragItem.sourceSquare && dragItem.pieceId) {
+                        if (dragItem.sourceSquare !== square)
+                          onPieceMove(dragItem.pieceId, square);
                       } else {
-                        onPieceDrop(
-                          dragItem.side,
-                          dragItem.type,
-                          square
-                        );
+                        onPieceDrop(dragItem.side, dragItem.type, square);
                       }
                       setDragItem(null);
                     }}
                     onClick={() => {
                       if (editMode === "piece") {
                         onPieceHint(square);
-                      } else if (
-                        editMode === "highlight"
-                      ) {
+                      } else if (editMode === "highlight") {
                         onHighlightToggle(square);
-                      } else if (
-                        editMode === "arrow"
-                      ) {
+                      } else if (editMode === "arrow") {
                         if (!arrowStart) {
                           setArrowStart(square);
                           setArrowPreview(null);
                         } else {
                           if (arrowStart !== square)
-                            onArrowDraw(
-                              arrowStart,
-                              square
-                            );
+                            onArrowDraw(arrowStart, square);
                           setArrowStart(null);
                           setArrowPreview(null);
                         }
                       }
                     }}
                     onMouseEnter={() => {
-                      if (
-                        editMode === "arrow" &&
-                        arrowStart
-                      )
+                      if (editMode === "arrow" && arrowStart)
                         setArrowPreview(square);
                     }}
                     onContextMenu={(e) => {
@@ -595,8 +538,8 @@ function InteractiveBoard({
                       />
                     )}
 
-                    {/* Selected piece highlight */}
-                    {isHintSource && (
+                    {/* BUG FIX: Only show yellow overlay on the actual source square */}
+                    {isSelectedSource && (
                       <div className="pointer-events-none absolute inset-0 bg-yellow-400/40" />
                     )}
 
@@ -605,13 +548,11 @@ function InteractiveBoard({
                       <span
                         draggable
                         onDragStart={(e) => {
-                          e.dataTransfer.effectAllowed =
-                            "move";
+                          e.dataTransfer.effectAllowed = "move";
                           setDragItem({
                             side: piece.side,
                             type: piece.type,
-                            sourceSquare:
-                              piece.square,
+                            sourceSquare: piece.square,
                             pieceId: piece.id,
                           });
                         }}
@@ -624,11 +565,7 @@ function InteractiveBoard({
                               : "drop-shadow(0 1px 2px rgba(0,0,0,0.3))",
                         }}
                       >
-                        {
-                          pieceSymbols[piece.side][
-                            piece.type
-                          ]
-                        }
+                        {pieceSymbols[piece.side][piece.type]}
                       </span>
                     )}
                   </div>
@@ -641,9 +578,7 @@ function InteractiveBoard({
           <div className="pointer-events-none absolute inset-0">
             {moveHints.map((square) => {
               const pos = squareToHintPosition(square);
-              const isCapture = pieces.some(
-                (p) => p.square === square
-              );
+              const isCapture = pieces.some((p) => p.square === square);
               return (
                 <div
                   key={`hint-${square}`}
@@ -667,11 +602,7 @@ function InteractiveBoard({
             className="pointer-events-none absolute inset-0 z-20 h-full w-full"
           >
             {arrows.map((a) => (
-              <ArrowPolygonSVG
-                key={a.id}
-                arrow={a}
-                idPrefix="ib"
-              />
+              <ArrowPolygonSVG key={a.id} arrow={a} idPrefix="ib" />
             ))}
           </svg>
         </div>
@@ -710,40 +641,13 @@ function InteractiveBoard({
 function createStartingPosition(): Piece[] {
   const p: Piece[] = [];
   const backRank: PieceType[] = [
-    "rook",
-    "knight",
-    "bishop",
-    "queen",
-    "king",
-    "bishop",
-    "knight",
-    "rook",
+    "rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook",
   ];
   for (let i = 0; i < 8; i++) {
-    p.push({
-      id: uid(),
-      square: `${files[i]}1`,
-      side: "white",
-      type: backRank[i],
-    });
-    p.push({
-      id: uid(),
-      square: `${files[i]}2`,
-      side: "white",
-      type: "pawn",
-    });
-    p.push({
-      id: uid(),
-      square: `${files[i]}7`,
-      side: "black",
-      type: "pawn",
-    });
-    p.push({
-      id: uid(),
-      square: `${files[i]}8`,
-      side: "black",
-      type: backRank[i],
-    });
+    p.push({ id: uid(), square: `${files[i]}1`, side: "white", type: backRank[i] });
+    p.push({ id: uid(), square: `${files[i]}2`, side: "white", type: "pawn" });
+    p.push({ id: uid(), square: `${files[i]}7`, side: "black", type: "pawn" });
+    p.push({ id: uid(), square: `${files[i]}8`, side: "black", type: backRank[i] });
   }
   return p;
 }
@@ -756,25 +660,16 @@ function parseTableGrid(text: string) {
     .map((line) => line.split("|").map((cell) => cell.trim()));
 }
 
-function resizeTableGrid(
-  grid: string[][],
-  rowCount: number,
-  colCount: number
-) {
+function resizeTableGrid(grid: string[][], rowCount: number, colCount: number) {
   const rows = Math.max(1, rowCount);
   const cols = Math.max(1, colCount);
   return Array.from({ length: rows }, (_, r) =>
-    Array.from(
-      { length: cols },
-      (_, c) => grid[r]?.[c] ?? ""
-    )
+    Array.from({ length: cols }, (_, c) => grid[r]?.[c] ?? "")
   );
 }
 
 function stringifyTableGrid(grid: string[][]) {
-  return grid
-    .map((row) => row.map((c) => c.trim()).join("|"))
-    .join("\n");
+  return grid.map((row) => row.map((c) => c.trim()).join("|")).join("\n");
 }
 
 // ─── SVG Board as standalone (for export) ──────────────────────────────
@@ -796,17 +691,14 @@ function generateStandaloneSVG(sec: SectionData): string {
 
   const pieceTexts = sec.pieces
     .map((p) => {
-      const { centerX, centerY } = squareToCoordSVG(
-        p.square
-      );
+      const { centerX, centerY } = squareToCoordSVG(p.square);
       return `<text x="${centerX}" y="${centerY}" font-size="20" fill="${p.side === "white" ? "white" : "black"}" text-anchor="middle" dominant-baseline="central">${pieceSymbols[p.side][p.type]}</text>`;
     })
     .join("\n");
 
   const arrowPolygons = sec.arrows
     .map((a) => {
-      const { points, rotation, cx, cy } =
-        computeArrowPolygon(a.from, a.to);
+      const { points, rotation, cx, cy } = computeArrowPolygon(a.from, a.to);
       return `<polygon id="arrow-${a.from}${a.to}" transform="rotate(${rotation.toFixed(2)} ${cx.toFixed(2)} ${cy.toFixed(2)})" points="${points}" style="fill:${a.color};opacity:${a.opacity};"/>`;
     })
     .join("\n");
@@ -866,36 +758,22 @@ export default function App() {
   ]);
 
   const [activeSectionId, setActiveSectionId] = useState(1);
-  const [highlightColor, setHighlightColor] =
-    useState("#facc15");
-  const [highlightOpacity, setHighlightOpacity] =
-    useState(0.45);
+  const [highlightColor, setHighlightColor] = useState("#facc15");
+  const [highlightOpacity, setHighlightOpacity] = useState(0.45);
   const [arrowColor, setArrowColor] = useState("#ffaa00");
   const [arrowOpacity, setArrowOpacity] = useState(0.8);
-  const [dragItem, setDragItem] =
-    useState<DragItem | null>(null);
-  const [editMode, setEditMode] = useState<
-    "piece" | "highlight" | "arrow"
-  >("piece");
-  const [outputMode, setOutputMode] = useState<
-    "pretty" | "minified"
-  >("pretty");
+  const [dragItem, setDragItem] = useState<DragItem | null>(null);
+  const [editMode, setEditMode] = useState<"piece" | "highlight" | "arrow">("piece");
+  const [outputMode, setOutputMode] = useState<"pretty" | "minified">("pretty");
   const [statusMessage, setStatusMessage] = useState("");
   const [copied, setCopied] = useState(false);
   const [isZipping, setIsZipping] = useState(false);
 
-  const activeSection = sections.find(
-    (s) => s.id === activeSectionId
-  )!;
+  const activeSection = sections.find((s) => s.id === activeSectionId)!;
 
-  function updateSection(
-    id: number,
-    updates: Partial<SectionData>
-  ) {
+  function updateSection(id: number, updates: Partial<SectionData>) {
     setSections((prev) =>
-      prev.map((s) =>
-        s.id === id ? { ...s, ...updates } : s
-      )
+      prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
     );
   }
 
@@ -913,12 +791,9 @@ export default function App() {
       setStatusMessage("Minimal harus ada 1 bagian");
       return;
     }
-    const remaining = sections.filter(
-      (s) => s.id !== id
-    );
+    const remaining = sections.filter((s) => s.id !== id);
     setSections(remaining);
-    if (activeSectionId === id)
-      setActiveSectionId(remaining[0].id);
+    if (activeSectionId === id) setActiveSectionId(remaining[0].id);
     setStatusMessage("Bagian dihapus");
   }
 
@@ -932,19 +807,11 @@ export default function App() {
         ...src,
         id: newId,
         sectionNumber: String(sections.length + 1),
-        pieces: src.pieces.map((p) => ({
-          ...p,
-          id: uid(),
-        })),
-        highlights: src.highlights.map((h) => ({
-          ...h,
-          id: uid(),
-        })),
-        arrows: src.arrows.map((a) => ({
-          ...a,
-          id: uid(),
-        })),
-        moveHints: [...src.moveHints],
+        pieces: src.pieces.map((p) => ({ ...p, id: uid() })),
+        highlights: src.highlights.map((h) => ({ ...h, id: uid() })),
+        arrows: src.arrows.map((a) => ({ ...a, id: uid() })),
+        moveHints: [],
+        hintSourceSquare: null,
       },
     ]);
     setActiveSectionId(newId);
@@ -953,28 +820,15 @@ export default function App() {
 
   // ─── Board Handlers ─────────────────────────────────────────────────
 
-  function handlePieceDrop(
-    side: PieceSide,
-    type: PieceType,
-    square: string
-  ) {
+  function handlePieceDrop(side: PieceSide, type: PieceType, square: string) {
     const prev = activeSection.pieces;
-    const idx = prev.findIndex(
-      (p) => p.square === square
-    );
+    const idx = prev.findIndex((p) => p.square === square);
     let nextPieces: Piece[];
     if (idx >= 0) {
       nextPieces = [...prev];
-      nextPieces[idx] = {
-        ...nextPieces[idx],
-        side,
-        type,
-      };
+      nextPieces[idx] = { ...nextPieces[idx], side, type };
     } else {
-      nextPieces = [
-        ...prev,
-        { id: uid(), square, side, type },
-      ];
+      nextPieces = [...prev, { id: uid(), square, side, type }];
     }
     updateSection(activeSectionId, {
       pieces: nextPieces,
@@ -984,18 +838,11 @@ export default function App() {
     setStatusMessage(`${side} ${type} → ${square}`);
   }
 
-  function handlePieceMove(
-    pieceId: number,
-    newSquare: string
-  ) {
+  function handlePieceMove(pieceId: number, newSquare: string) {
     updateSection(activeSectionId, {
       pieces: activeSection.pieces
-        .filter((p) => p.square !== newSquare)
-        .map((p) =>
-          p.id === pieceId
-            ? { ...p, square: newSquare }
-            : p
-        ),
+        .filter((p) => p.square !== newSquare || p.id === pieceId)
+        .map((p) => (p.id === pieceId ? { ...p, square: newSquare } : p)),
       moveHints: [],
       hintSourceSquare: null,
     });
@@ -1003,21 +850,19 @@ export default function App() {
   }
 
   function handlePieceRemove(pieceId: number) {
+    const removedPiece = activeSection.pieces.find((p) => p.id === pieceId);
+    const wasSource = removedPiece && removedPiece.square === activeSection.hintSourceSquare;
     updateSection(activeSectionId, {
-      pieces: activeSection.pieces.filter(
-        (p) => p.id !== pieceId
-      ),
-      moveHints: [],
-      hintSourceSquare: null,
+      pieces: activeSection.pieces.filter((p) => p.id !== pieceId),
+      moveHints: wasSource ? [] : activeSection.moveHints,
+      hintSourceSquare: wasSource ? null : activeSection.hintSourceSquare,
     });
     setStatusMessage("Bidak dihapus");
   }
 
   function handleHighlightToggle(square: string) {
     const prev = activeSection.highlights;
-    const idx = prev.findIndex(
-      (h) => h.square === square
-    );
+    const idx = prev.findIndex((h) => h.square === square);
     updateSection(activeSectionId, {
       highlights:
         idx >= 0
@@ -1036,9 +881,7 @@ export default function App() {
 
   function handleArrowDraw(from: string, to: string) {
     const prev = activeSection.arrows;
-    const idx = prev.findIndex(
-      (a) => a.from === from && a.to === to
-    );
+    const idx = prev.findIndex((a) => a.from === from && a.to === to);
     updateSection(activeSectionId, {
       arrows:
         idx >= 0
@@ -1058,9 +901,9 @@ export default function App() {
 
   function handlePieceHint(square: string) {
     if (editMode !== "piece") return;
-    const selectedPiece = activeSection.pieces.find(
-      (p) => p.square === square
-    );
+    const selectedPiece = activeSection.pieces.find((p) => p.square === square);
+
+    // Clicked on empty square -> clear hints
     if (!selectedPiece) {
       updateSection(activeSectionId, {
         moveHints: [],
@@ -1068,20 +911,18 @@ export default function App() {
       });
       return;
     }
-    if (
-      activeSection.hintSourceSquare === square &&
-      activeSection.moveHints.length > 0
-    ) {
+
+    // Clicked on the same source again -> toggle off
+    if (activeSection.hintSourceSquare === square) {
       updateSection(activeSectionId, {
         moveHints: [],
         hintSourceSquare: null,
       });
       return;
     }
-    const hints = getPseudoLegalMoves(
-      selectedPiece,
-      activeSection.pieces
-    );
+
+    // Clicked on a different piece -> show its moves
+    const hints = getPseudoLegalMoves(selectedPiece, activeSection.pieces);
     updateSection(activeSectionId, {
       moveHints: hints,
       hintSourceSquare: square,
@@ -1110,17 +951,14 @@ export default function App() {
 
     const pieceTexts = sec.pieces
       .map((p) => {
-        const { centerX, centerY } = squareToCoordSVG(
-          p.square
-        );
+        const { centerX, centerY } = squareToCoordSVG(p.square);
         return `                        <text x="${centerX}" y="${centerY}" font-size="20" fill="${p.side === "white" ? "white" : "black"}" text-anchor="middle" dominant-baseline="central">${pieceSymbols[p.side][p.type]}</text>`;
       })
       .join("\n");
 
     const arrowPolygons = sec.arrows
       .map((a) => {
-        const { points, rotation, cx, cy } =
-          computeArrowPolygon(a.from, a.to);
+        const { points, rotation, cx, cy } = computeArrowPolygon(a.from, a.to);
         return `                        <polygon id="arrow-${a.from}${a.to}" data-arrow="${a.from}${a.to}" class="arrow" transform="rotate(${rotation.toFixed(2)} ${cx.toFixed(2)} ${cy.toFixed(2)})" points="${points}" style="fill: ${a.color}; opacity: ${a.opacity};"/>`;
       })
       .join("\n");
@@ -1145,9 +983,7 @@ export default function App() {
     const hintDivs = sec.moveHints
       .map((square) => {
         const pos = squareToHintPosition(square);
-        const isCapture = sec.pieces.some(
-          (p) => p.square === square
-        );
+        const isCapture = sec.pieces.some((p) => p.square === square);
         const style = isCapture
           ? `left:${pos.left};top:${pos.top};width:27.5px;height:27.5px;border:4px solid rgba(0,0,0,0.3);background:transparent;border-radius:9999px;`
           : `left:${pos.left};top:${pos.top};`;
@@ -1209,13 +1045,9 @@ export default function App() {
           .filter(Boolean);
         const movHtml = movItems
           .map((item) => escapeHtml(item))
-          .join(
-            "<br>\n                        "
-          );
+          .join("<br>\n                        ");
         const flexDir =
-          sec.boardPlacement === "left"
-            ? "md:flex-row-reverse"
-            : "md:flex-row";
+          sec.boardPlacement === "left" ? "md:flex-row-reverse" : "md:flex-row";
 
         let sidePanelBlock = "";
         if (sec.showBoardPanel) {
@@ -1309,10 +1141,7 @@ export default function App() {
   }, [sections]);
 
   const outputCode = useMemo(
-    () =>
-      outputMode === "minified"
-        ? minifyHtml(generatedCode)
-        : generatedCode,
+    () => (outputMode === "minified" ? minifyHtml(generatedCode) : generatedCode),
     [generatedCode, outputMode]
   );
 
@@ -1323,24 +1152,13 @@ export default function App() {
         activeSection.tableRowCount,
         activeSection.tableColumnCount
       ),
-    [
-      activeSection.tableColumnCount,
-      activeSection.tableRowCount,
-      activeSection.tableRowsText,
-    ]
+    [activeSection.tableColumnCount, activeSection.tableRowCount, activeSection.tableRowsText]
   );
 
-  function updateTableShape(
-    nextRows: number,
-    nextCols: number
-  ) {
+  function updateTableShape(nextRows: number, nextCols: number) {
     const r = Math.max(1, nextRows);
     const c = Math.max(1, nextCols);
-    const nextGrid = resizeTableGrid(
-      editorTableGrid,
-      r,
-      c
-    );
+    const nextGrid = resizeTableGrid(editorTableGrid, r, c);
     updateSection(activeSectionId, {
       tableRowCount: r,
       tableColumnCount: c,
@@ -1348,15 +1166,9 @@ export default function App() {
     });
   }
 
-  function updateTableCell(
-    rowIdx: number,
-    colIdx: number,
-    value: string
-  ) {
+  function updateTableCell(rowIdx: number, colIdx: number, value: string) {
     const nextGrid = editorTableGrid.map((row, r) =>
-      row.map((cell, c) =>
-        r === rowIdx && c === colIdx ? value : cell
-      )
+      row.map((cell, c) => (r === rowIdx && c === colIdx ? value : cell))
     );
     updateSection(activeSectionId, {
       tableRowsText: stringifyTableGrid(nextGrid),
@@ -1380,26 +1192,16 @@ export default function App() {
       const root = zip.folder("chess-article-project");
       if (!root) throw new Error("Gagal membuat folder");
 
-      // Main HTML article
       root.file("index.html", generatedCode);
 
-      // Individual SVG files for each section
       const svgFolder = root.folder("boards");
       sections.forEach((sec) => {
-        if (
-          sec.showBoardPanel &&
-          !sec.showPieceValueTable
-        ) {
-          const svgContent =
-            generateStandaloneSVG(sec);
-          svgFolder?.file(
-            `board-section-${sec.sectionNumber}.svg`,
-            svgContent
-          );
+        if (sec.showBoardPanel && !sec.showPieceValueTable) {
+          const svgContent = generateStandaloneSVG(sec);
+          svgFolder?.file(`board-section-${sec.sectionNumber}.svg`, svgContent);
         }
       });
 
-      // Project config
       const packageJson = {
         name: "chess-article",
         private: true,
@@ -1423,19 +1225,8 @@ export default function App() {
         },
       };
 
-      root.file(
-        "package.json",
-        JSON.stringify(packageJson, null, 2)
-      );
-      root.file(
-        ".gitignore",
-        [
-          "node_modules",
-          "dist",
-          ".DS_Store",
-          "*.log",
-        ].join("\n")
-      );
+      root.file("package.json", JSON.stringify(packageJson, null, 2));
+      root.file(".gitignore", ["node_modules", "dist", ".DS_Store", "*.log"].join("\n"));
       root.file(
         "README.md",
         [
@@ -1465,10 +1256,10 @@ export default function App() {
           "",
           "export default defineConfig({",
           "  plugins: [",
-		  "  react(),",
-		   "  tailwindcss(),",
-		   "  ],",
-		  "  base: './',",
+          "    react(),",
+          "    tailwindcss(),",
+          "  ],",
+          "  base: './',",
           "});",
         ].join("\n")
       );
@@ -1480,11 +1271,7 @@ export default function App() {
             compilerOptions: {
               target: "ES2020",
               useDefineForClassFields: true,
-              lib: [
-                "ES2020",
-                "DOM",
-                "DOM.Iterable",
-              ],
+              lib: ["ES2020", "DOM", "DOM.Iterable"],
               module: "ESNext",
               skipLibCheck: true,
               moduleResolution: "Bundler",
@@ -1502,19 +1289,11 @@ export default function App() {
         )
       );
 
-      // Public folder with article
       const publicFolder = root.folder("public");
-      publicFolder?.file(
-        "chess-article.html",
-        generatedCode
-      );
+      publicFolder?.file("chess-article.html", generatedCode);
 
-      // Source files
       const srcFolder = root.folder("src");
-      srcFolder?.file(
-        "index.css",
-        '@import "tailwindcss";\n'
-      );
+      srcFolder?.file("index.css", '@import "tailwindcss";\n');
       srcFolder?.file(
         "main.tsx",
         [
@@ -1536,7 +1315,7 @@ export default function App() {
           "export default function App() {",
           "  return (",
           '    <div className="min-h-screen bg-gray-100">',
-          '      <iframe',
+          "      <iframe",
           '        title="Chess Article"',
           '        src="/chess-article.html"',
           '        className="mx-auto block h-screen w-full max-w-4xl border-0"',
@@ -1547,7 +1326,6 @@ export default function App() {
         ].join("\n")
       );
 
-      // Entrypoint HTML
       root.file(
         "index-dev.html",
         [
@@ -1566,7 +1344,6 @@ export default function App() {
         ].join("\n")
       );
 
-      // JSON data export (for reimport later)
       root.file(
         "article-data.json",
         JSON.stringify(
@@ -1574,7 +1351,6 @@ export default function App() {
             exportedAt: new Date().toISOString(),
             sections: sections.map((s) => ({
               ...s,
-              // strip runtime-only fields
               moveHints: [],
               hintSourceSquare: null,
             })),
@@ -1584,9 +1360,7 @@ export default function App() {
         )
       );
 
-      const blob = await zip.generateAsync({
-        type: "blob",
-      });
+      const blob = await zip.generateAsync({ type: "blob" });
       const link = document.createElement("a");
       link.href = URL.createObjectURL(blob);
       link.download = "chess-article-project.zip";
@@ -1619,8 +1393,7 @@ export default function App() {
               ♟ Chess Article Builder
             </h1>
             <p className="mt-1 max-w-2xl text-xs text-slate-500 md:text-sm">
-              Buat artikel catur bergaya Chess.com —
-              drag-drop, highlight, panah, hint langkah,
+              Buat artikel catur bergaya Chess.com — drag-drop, highlight, panah, hint langkah,
               tabel. Output HTML + ZIP.
             </p>
           </div>
@@ -1630,44 +1403,33 @@ export default function App() {
               disabled={isZipping}
               className="shrink-0 rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-white shadow transition hover:bg-slate-700 disabled:opacity-60"
             >
-              {isZipping
-                ? "⏳ Membuat ZIP..."
-                : "📦 Download ZIP"}
+              {isZipping ? "⏳ Membuat ZIP..." : "📦 Download ZIP"}
             </button>
             <button
               onClick={copyCode}
               className={`shrink-0 rounded-lg px-4 py-2 text-sm font-bold text-white shadow transition ${
-                copied
-                  ? "bg-emerald-600"
-                  : "bg-[#81b64c] hover:bg-[#6da03d]"
+                copied ? "bg-emerald-600" : "bg-[#81b64c] hover:bg-[#6da03d]"
               }`}
             >
-              {copied
-                ? "✓ Tersalin!"
-                : "📋 Copy Full HTML"}
+              {copied ? "✓ Tersalin!" : "📋 Copy Full HTML"}
             </button>
           </div>
         </header>
 
         {/* ── Section Tabs ────────────────────────────── */}
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-300 bg-white p-2.5 shadow-sm">
-          <span className="text-xs font-bold uppercase text-slate-400">
-            Bagian:
-          </span>
-          {sections.map((sec, idx) => (
+          <span className="text-xs font-bold uppercase text-slate-400">Bagian:</span>
+          {sections.map((sec) => (
             <button
               key={sec.id}
-              onClick={() =>
-                setActiveSectionId(sec.id)
-              }
+              onClick={() => setActiveSectionId(sec.id)}
               className={`rounded px-3 py-1.5 text-xs font-bold transition ${
                 activeSectionId === sec.id
                   ? "bg-[#81b64c] text-white shadow"
                   : "bg-stone-100 text-slate-600 hover:bg-stone-200"
               }`}
             >
-              {sec.sectionNumber}.{" "}
-              {sec.sectionTitle.substring(0, 18)}
+              {sec.sectionNumber}. {sec.sectionTitle.substring(0, 18)}
               {sec.sectionTitle.length > 18 ? "…" : ""}
             </button>
           ))}
@@ -1685,22 +1447,17 @@ export default function App() {
           <div className="space-y-3 rounded-lg border border-stone-300 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400">
-                Editor — Bagian{" "}
-                {activeSection.sectionNumber}
+                Editor — Bagian {activeSection.sectionNumber}
               </h2>
               <div className="flex gap-1.5">
                 <button
-                  onClick={() =>
-                    duplicateSection(activeSectionId)
-                  }
+                  onClick={() => duplicateSection(activeSectionId)}
                   className="rounded bg-stone-100 px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-stone-200"
                 >
                   ⧉ Duplikasi
                 </button>
                 <button
-                  onClick={() =>
-                    removeSection(activeSectionId)
-                  }
+                  onClick={() => removeSection(activeSectionId)}
                   className="rounded bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-500 hover:bg-red-100"
                 >
                   🗑 Hapus
@@ -1711,29 +1468,21 @@ export default function App() {
             {/* Form */}
             <div className="grid gap-3 md:grid-cols-2">
               <label className="block space-y-1">
-                <span className="text-[11px] font-bold text-slate-500">
-                  Nomor
-                </span>
+                <span className="text-[11px] font-bold text-slate-500">Nomor</span>
                 <input
                   value={activeSection.sectionNumber}
                   onChange={(e) =>
-                    updateSection(activeSectionId, {
-                      sectionNumber: e.target.value,
-                    })
+                    updateSection(activeSectionId, { sectionNumber: e.target.value })
                   }
                   className="w-full rounded border border-stone-300 px-2.5 py-1.5 text-sm outline-none focus:border-[#81b64c]"
                 />
               </label>
               <label className="block space-y-1">
-                <span className="text-[11px] font-bold text-slate-500">
-                  Judul
-                </span>
+                <span className="text-[11px] font-bold text-slate-500">Judul</span>
                 <input
                   value={activeSection.sectionTitle}
                   onChange={(e) =>
-                    updateSection(activeSectionId, {
-                      sectionTitle: e.target.value,
-                    })
+                    updateSection(activeSectionId, { sectionTitle: e.target.value })
                   }
                   className="w-full rounded border border-stone-300 px-2.5 py-1.5 text-sm outline-none focus:border-[#81b64c]"
                 />
@@ -1741,15 +1490,11 @@ export default function App() {
             </div>
 
             <label className="block space-y-1">
-              <span className="text-[11px] font-bold text-slate-500">
-                Deskripsi
-              </span>
+              <span className="text-[11px] font-bold text-slate-500">Deskripsi</span>
               <textarea
                 value={activeSection.description}
                 onChange={(e) =>
-                  updateSection(activeSectionId, {
-                    description: e.target.value,
-                  })
+                  updateSection(activeSectionId, { description: e.target.value })
                 }
                 rows={3}
                 className="w-full rounded border border-stone-300 px-2.5 py-1.5 text-sm outline-none focus:border-[#81b64c]"
@@ -1758,93 +1503,57 @@ export default function App() {
 
             <div className="grid gap-3 md:grid-cols-2">
               <label className="block space-y-1">
-                <span className="text-[11px] font-bold text-slate-500">
-                  Judul Teks
-                </span>
+                <span className="text-[11px] font-bold text-slate-500">Judul Teks</span>
                 <input
                   value={activeSection.movementTitle}
                   onChange={(e) =>
-                    updateSection(activeSectionId, {
-                      movementTitle: e.target.value,
-                    })
+                    updateSection(activeSectionId, { movementTitle: e.target.value })
                   }
                   className="w-full rounded border border-stone-300 px-2.5 py-1.5 text-sm outline-none focus:border-[#81b64c]"
                 />
               </label>
               <label className="block space-y-1">
-                <span className="text-[11px] font-bold text-slate-500">
-                  Layout Panel
-                </span>
+                <span className="text-[11px] font-bold text-slate-500">Layout Panel</span>
                 <select
                   value={
                     !activeSection.showBoardPanel
                       ? "text-only"
                       : activeSection.showPieceValueTable
-                        ? activeSection.boardPlacement ===
-                          "left"
+                        ? activeSection.boardPlacement === "left"
                           ? "table-left"
                           : "table-right"
-                        : activeSection.boardPlacement ===
-                            "left"
+                        : activeSection.boardPlacement === "left"
                           ? "board-left"
                           : "board-right"
                   }
                   onChange={(e) => {
                     const v = e.target.value;
                     if (v === "text-only") {
-                      updateSection(
-                        activeSectionId,
-                        {
-                          showBoardPanel: false,
-                          showPieceValueTable: false,
-                        }
-                      );
-                    } else if (
-                      v === "board-left" ||
-                      v === "board-right"
-                    ) {
-                      updateSection(
-                        activeSectionId,
-                        {
-                          showBoardPanel: true,
-                          showPieceValueTable: false,
-                          boardPlacement:
-                            v === "board-left"
-                              ? "left"
-                              : "right",
-                        }
-                      );
+                      updateSection(activeSectionId, {
+                        showBoardPanel: false,
+                        showPieceValueTable: false,
+                      });
+                    } else if (v === "board-left" || v === "board-right") {
+                      updateSection(activeSectionId, {
+                        showBoardPanel: true,
+                        showPieceValueTable: false,
+                        boardPlacement: v === "board-left" ? "left" : "right",
+                      });
                     } else {
-                      updateSection(
-                        activeSectionId,
-                        {
-                          showBoardPanel: true,
-                          showPieceValueTable: true,
-                          boardPlacement:
-                            v === "table-left"
-                              ? "left"
-                              : "right",
-                        }
-                      );
+                      updateSection(activeSectionId, {
+                        showBoardPanel: true,
+                        showPieceValueTable: true,
+                        boardPlacement: v === "table-left" ? "left" : "right",
+                      });
                     }
                   }}
                   className="w-full rounded border border-stone-300 px-2.5 py-1.5 text-sm outline-none focus:border-[#81b64c]"
                 >
-                  <option value="board-right">
-                    📋 Teks kiri, Papan kanan
-                  </option>
-                  <option value="board-left">
-                    Papan kiri, Teks kanan 📋
-                  </option>
-                  <option value="table-right">
-                    📋 Teks kiri, Tabel kanan
-                  </option>
-                  <option value="table-left">
-                    Tabel kiri, Teks kanan 📋
-                  </option>
-                  <option value="text-only">
-                    Tanpa Panel
-                  </option>
+                  <option value="board-right">📋 Teks kiri, Papan kanan</option>
+                  <option value="board-left">Papan kiri, Teks kanan 📋</option>
+                  <option value="table-right">📋 Teks kiri, Tabel kanan</option>
+                  <option value="table-left">Tabel kiri, Teks kanan 📋</option>
+                  <option value="text-only">Tanpa Panel</option>
                 </select>
               </label>
             </div>
@@ -1852,16 +1561,12 @@ export default function App() {
             <label className="block space-y-1">
               <span className="text-[11px] font-bold text-slate-500">
                 Isi Teks{" "}
-                <span className="font-normal text-slate-400">
-                  (1 baris = 1 paragraf)
-                </span>
+                <span className="font-normal text-slate-400">(1 baris = 1 paragraf)</span>
               </span>
               <textarea
                 value={activeSection.movementText}
                 onChange={(e) =>
-                  updateSection(activeSectionId, {
-                    movementText: e.target.value,
-                  })
+                  updateSection(activeSectionId, { movementText: e.target.value })
                 }
                 rows={3}
                 className="w-full rounded border border-stone-300 px-2.5 py-1.5 text-sm outline-none focus:border-[#81b64c]"
@@ -1871,16 +1576,8 @@ export default function App() {
             {/* Edit Mode */}
             <div className="border-t border-stone-200 pt-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-bold uppercase text-slate-400">
-                  Mode:
-                </span>
-                {(
-                  [
-                    "piece",
-                    "highlight",
-                    "arrow",
-                  ] as const
-                ).map((mode) => (
+                <span className="text-[10px] font-bold uppercase text-slate-400">Mode:</span>
+                {(["piece", "highlight", "arrow"] as const).map((mode) => (
                   <button
                     key={mode}
                     onClick={() => setEditMode(mode)}
@@ -1901,80 +1598,52 @@ export default function App() {
 
               {editMode === "highlight" && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 rounded bg-yellow-50 p-2 text-[11px]">
-                  <span className="font-bold text-slate-500">
-                    Warna:
-                  </span>
+                  <span className="font-bold text-slate-500">Warna:</span>
                   <input
                     type="color"
                     value={highlightColor}
-                    onChange={(e) =>
-                      setHighlightColor(
-                        e.target.value
-                      )
-                    }
+                    onChange={(e) => setHighlightColor(e.target.value)}
                     className="h-6 w-8 cursor-pointer border border-stone-300 p-0.5"
                   />
-                  <span className="font-bold text-slate-500">
-                    Opacity:
-                  </span>
+                  <span className="font-bold text-slate-500">Opacity:</span>
                   <input
                     type="number"
                     min={0.1}
                     max={1}
                     step={0.05}
                     value={highlightOpacity}
-                    onChange={(e) =>
-                      setHighlightOpacity(
-                        Number(e.target.value)
-                      )
-                    }
+                    onChange={(e) => setHighlightOpacity(Number(e.target.value))}
                     className="w-14 rounded border border-stone-300 px-1.5 py-0.5 text-[11px]"
                   />
-                  <span className="text-slate-400">
-                    Klik kotak papan
-                  </span>
+                  <span className="text-slate-400">Klik kotak papan</span>
                 </div>
               )}
               {editMode === "arrow" && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 rounded bg-blue-50 p-2 text-[11px]">
-                  <span className="font-bold text-slate-500">
-                    Warna:
-                  </span>
+                  <span className="font-bold text-slate-500">Warna:</span>
                   <input
                     type="color"
                     value={arrowColor}
-                    onChange={(e) =>
-                      setArrowColor(e.target.value)
-                    }
+                    onChange={(e) => setArrowColor(e.target.value)}
                     className="h-6 w-8 cursor-pointer border border-stone-300 p-0.5"
                   />
-                  <span className="font-bold text-slate-500">
-                    Opacity:
-                  </span>
+                  <span className="font-bold text-slate-500">Opacity:</span>
                   <input
                     type="number"
                     min={0.1}
                     max={1}
                     step={0.05}
                     value={arrowOpacity}
-                    onChange={(e) =>
-                      setArrowOpacity(
-                        Number(e.target.value)
-                      )
-                    }
+                    onChange={(e) => setArrowOpacity(Number(e.target.value))}
                     className="w-14 rounded border border-stone-300 px-1.5 py-0.5 text-[11px]"
                   />
-                  <span className="text-slate-400">
-                    Klik asal → klik tujuan
-                  </span>
+                  <span className="text-slate-400">Klik asal → klik tujuan</span>
                 </div>
               )}
               {editMode === "piece" && (
                 <p className="mt-2 rounded bg-green-50 p-2 text-[11px] text-slate-500">
-                  Tarik dari baki → papan. Tarik di papan
-                  → pindah.{" "}
-                  <strong>Klik kanan</strong> → hapus.
-                  Klik bidak = hint langkah.
+                  Tarik dari baki → papan. Tarik di papan → pindah.{" "}
+                  <strong>Klik kanan</strong> → hapus. Klik bidak = hint langkah.
                 </p>
               )}
             </div>
@@ -1988,9 +1657,7 @@ export default function App() {
                     moveHints: [],
                     hintSourceSquare: null,
                   });
-                  setStatusMessage(
-                    "Posisi awal dimuat"
-                  );
+                  setStatusMessage("Posisi awal dimuat");
                 }}
                 className="rounded border border-[#81b64c] bg-green-50 px-2 py-1 text-[10px] font-bold text-[#81b64c] hover:bg-green-100"
               >
@@ -2035,21 +1702,13 @@ export default function App() {
                 Hapus Hint
               </button>
               <button
-                onClick={() =>
-                  updateSection(activeSectionId, {
-                    highlights: [],
-                  })
-                }
+                onClick={() => updateSection(activeSectionId, { highlights: [] })}
                 className="rounded border border-stone-200 px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-stone-100"
               >
                 Hapus Highlight
               </button>
               <button
-                onClick={() =>
-                  updateSection(activeSectionId, {
-                    arrows: [],
-                  })
-                }
+                onClick={() => updateSection(activeSectionId, { arrows: [] })}
                 className="rounded border border-stone-200 px-2 py-1 text-[10px] font-semibold text-slate-500 hover:bg-stone-100"
               >
                 Hapus Panah
@@ -2060,13 +1719,10 @@ export default function App() {
             <div className="grid gap-2 text-[11px] text-slate-500 md:grid-cols-3">
               <div>
                 <p className="font-bold text-slate-700">
-                  Bidak (
-                  {activeSection.pieces.length})
+                  Bidak ({activeSection.pieces.length})
                 </p>
                 {activeSection.pieces.length === 0 && (
-                  <p className="italic text-slate-400">
-                    —
-                  </p>
+                  <p className="italic text-slate-400">—</p>
                 )}
                 <div className="max-h-24 overflow-y-auto">
                   {activeSection.pieces.map((p) => (
@@ -2075,18 +1731,46 @@ export default function App() {
                       className="flex items-center justify-between border-b border-stone-100 py-px"
                     >
                       <span>
-                        {
-                          pieceSymbols[p.side][
-                            p.type
-                          ]
-                        }{" "}
-                        <span className="font-mono">
-                          {p.square}
-                        </span>
+                        {pieceSymbols[p.side][p.type]}{" "}
+                        <span className="font-mono">{p.square}</span>
+                      </span>
+                      <button
+                        onClick={() => handlePieceRemove(p.id)}
+                        className="text-red-400 hover:text-red-600"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <p className="font-bold text-slate-700">
+                  Highlight ({activeSection.highlights.length})
+                </p>
+                {activeSection.highlights.length === 0 && (
+                  <p className="italic text-slate-400">—</p>
+                )}
+                <div className="max-h-24 overflow-y-auto">
+                  {activeSection.highlights.map((h) => (
+                    <div
+                      key={h.id}
+                      className="flex items-center justify-between border-b border-stone-100 py-px"
+                    >
+                      <span className="flex items-center gap-1">
+                        <span
+                          className="inline-block h-2.5 w-2.5 rounded-sm"
+                          style={{ background: h.color }}
+                        />
+                        <span className="font-mono">{h.square}</span>
                       </span>
                       <button
                         onClick={() =>
-                          handlePieceRemove(p.id)
+                          updateSection(activeSectionId, {
+                            highlights: activeSection.highlights.filter(
+                              (x) => x.id !== h.id
+                            ),
+                          })
                         }
                         className="text-red-400 hover:text-red-600"
                       >
@@ -2098,64 +1782,10 @@ export default function App() {
               </div>
               <div>
                 <p className="font-bold text-slate-700">
-                  Highlight (
-                  {activeSection.highlights.length})
-                </p>
-                {activeSection.highlights.length ===
-                  0 && (
-                  <p className="italic text-slate-400">
-                    —
-                  </p>
-                )}
-                <div className="max-h-24 overflow-y-auto">
-                  {activeSection.highlights.map(
-                    (h) => (
-                      <div
-                        key={h.id}
-                        className="flex items-center justify-between border-b border-stone-100 py-px"
-                      >
-                        <span className="flex items-center gap-1">
-                          <span
-                            className="inline-block h-2.5 w-2.5 rounded-sm"
-                            style={{
-                              background: h.color,
-                            }}
-                          />
-                          <span className="font-mono">
-                            {h.square}
-                          </span>
-                        </span>
-                        <button
-                          onClick={() =>
-                            updateSection(
-                              activeSectionId,
-                              {
-                                highlights:
-                                  activeSection.highlights.filter(
-                                    (x) =>
-                                      x.id !== h.id
-                                  ),
-                              }
-                            )
-                          }
-                          className="text-red-400 hover:text-red-600"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-              <div>
-                <p className="font-bold text-slate-700">
-                  Panah (
-                  {activeSection.arrows.length})
+                  Panah ({activeSection.arrows.length})
                 </p>
                 {activeSection.arrows.length === 0 && (
-                  <p className="italic text-slate-400">
-                    —
-                  </p>
+                  <p className="italic text-slate-400">—</p>
                 )}
                 <div className="max-h-24 overflow-y-auto">
                   {activeSection.arrows.map((a) => (
@@ -2166,9 +1796,7 @@ export default function App() {
                       <span className="flex items-center gap-1">
                         <span
                           className="inline-block h-2.5 w-2.5 rounded-sm"
-                          style={{
-                            background: a.color,
-                          }}
+                          style={{ background: a.color }}
                         />
                         <span className="font-mono">
                           {a.from}→{a.to}
@@ -2176,16 +1804,9 @@ export default function App() {
                       </span>
                       <button
                         onClick={() =>
-                          updateSection(
-                            activeSectionId,
-                            {
-                              arrows:
-                                activeSection.arrows.filter(
-                                  (x) =>
-                                    x.id !== a.id
-                                ),
-                            }
-                          )
+                          updateSection(activeSectionId, {
+                            arrows: activeSection.arrows.filter((x) => x.id !== a.id),
+                          })
                         }
                         className="text-red-400 hover:text-red-600"
                       >
@@ -2209,16 +1830,14 @@ export default function App() {
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
               Bidak Hitam
             </p>
-            <PieceTray
-              side="black"
-              onDragStart={(item) => setDragItem(item)}
-            />
+            <PieceTray side="black" onDragStart={(item) => setDragItem(item)} />
 
             <InteractiveBoard
               pieces={activeSection.pieces}
               highlights={activeSection.highlights}
               arrows={activeSection.arrows}
               moveHints={activeSection.moveHints}
+              hintSourceSquare={activeSection.hintSourceSquare}
               onPieceDrop={handlePieceDrop}
               onPieceMove={handlePieceMove}
               onPieceRemove={handlePieceRemove}
@@ -2230,117 +1849,83 @@ export default function App() {
               editMode={editMode}
             />
 
-            <PieceTray
-              side="white"
-              onDragStart={(item) => setDragItem(item)}
-            />
+            <PieceTray side="white" onDragStart={(item) => setDragItem(item)} />
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
               Bidak Putih
             </p>
 
             {/* Table Editor (when table mode) */}
-            {activeSection.showBoardPanel &&
-              activeSection.showPieceValueTable && (
-                <div className="w-full space-y-2 border-t border-stone-200 pt-3">
-                  <p className="text-[11px] font-bold text-slate-500">
-                    Editor Tabel
-                  </p>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <label className="space-y-1">
-                      <span className="block text-[11px] font-semibold text-slate-500">
-                        Kolom
-                      </span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={8}
-                        value={
+            {activeSection.showBoardPanel && activeSection.showPieceValueTable && (
+              <div className="w-full space-y-2 border-t border-stone-200 pt-3">
+                <p className="text-[11px] font-bold text-slate-500">Editor Tabel</p>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="space-y-1">
+                    <span className="block text-[11px] font-semibold text-slate-500">
+                      Kolom
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={8}
+                      value={activeSection.tableColumnCount}
+                      onChange={(e) =>
+                        updateTableShape(
+                          activeSection.tableRowCount,
+                          Number(e.target.value) || 1
+                        )
+                      }
+                      className="w-full rounded border border-stone-300 px-2 py-1.5 text-sm outline-none focus:border-[#81b64c]"
+                    />
+                  </label>
+                  <label className="space-y-1">
+                    <span className="block text-[11px] font-semibold text-slate-500">
+                      Baris
+                    </span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={activeSection.tableRowCount}
+                      onChange={(e) =>
+                        updateTableShape(
+                          Number(e.target.value) || 1,
                           activeSection.tableColumnCount
-                        }
-                        onChange={(e) =>
-                          updateTableShape(
-                            activeSection.tableRowCount,
-                            Number(
-                              e.target.value
-                            ) || 1
-                          )
-                        }
-                        className="w-full rounded border border-stone-300 px-2 py-1.5 text-sm outline-none focus:border-[#81b64c]"
-                      />
-                    </label>
-                    <label className="space-y-1">
-                      <span className="block text-[11px] font-semibold text-slate-500">
-                        Baris
-                      </span>
-                      <input
-                        type="number"
-                        min={1}
-                        max={20}
-                        value={
-                          activeSection.tableRowCount
-                        }
-                        onChange={(e) =>
-                          updateTableShape(
-                            Number(
-                              e.target.value
-                            ) || 1,
-                            activeSection.tableColumnCount
-                          )
-                        }
-                        className="w-full rounded border border-stone-300 px-2 py-1.5 text-sm outline-none focus:border-[#81b64c]"
-                      />
-                    </label>
-                  </div>
-                  <div className="max-h-64 w-full overflow-auto rounded border border-stone-300">
-                    <table className="min-w-max border-collapse text-xs">
-                      <tbody>
-                        {editorTableGrid.map(
-                          (row, rowIdx) => (
-                            <tr
-                              key={`erow-${rowIdx}`}
-                            >
-                              <td className="w-6 border border-stone-200 bg-stone-50 px-1 py-0.5 text-center text-[9px] font-bold text-slate-400">
-                                {rowIdx === 0
-                                  ? "H"
-                                  : rowIdx}
-                              </td>
-                              {row.map(
-                                (cell, colIdx) => (
-                                  <td
-                                    key={`ecell-${rowIdx}-${colIdx}`}
-                                    className="border border-stone-300 p-0.5"
-                                  >
-                                    <input
-                                      value={cell}
-                                      onChange={(
-                                        e
-                                      ) =>
-                                        updateTableCell(
-                                          rowIdx,
-                                          colIdx,
-                                          e.target
-                                            .value
-                                        )
-                                      }
-                                      className="w-full min-w-[60px] border-0 bg-transparent px-1 py-1 text-xs outline-none"
-                                      placeholder={
-                                        rowIdx ===
-                                        0
-                                          ? `Header ${colIdx + 1}`
-                                          : ""
-                                      }
-                                    />
-                                  </td>
-                                )
-                              )}
-                            </tr>
-                          )
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                        )
+                      }
+                      className="w-full rounded border border-stone-300 px-2 py-1.5 text-sm outline-none focus:border-[#81b64c]"
+                    />
+                  </label>
                 </div>
-              )}
+                <div className="max-h-64 w-full overflow-auto rounded border border-stone-300">
+                  <table className="min-w-max border-collapse text-xs">
+                    <tbody>
+                      {editorTableGrid.map((row, rowIdx) => (
+                        <tr key={`erow-${rowIdx}`}>
+                          <td className="w-6 border border-stone-200 bg-stone-50 px-1 py-0.5 text-center text-[9px] font-bold text-slate-400">
+                            {rowIdx === 0 ? "H" : rowIdx}
+                          </td>
+                          {row.map((cell, colIdx) => (
+                            <td
+                              key={`ecell-${rowIdx}-${colIdx}`}
+                              className="border border-stone-300 p-0.5"
+                            >
+                              <input
+                                value={cell}
+                                onChange={(e) =>
+                                  updateTableCell(rowIdx, colIdx, e.target.value)
+                                }
+                                className="w-full min-w-[60px] border-0 bg-transparent px-1 py-1 text-xs outline-none"
+                                placeholder={rowIdx === 0 ? `Header ${colIdx + 1}` : ""}
+                              />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 
@@ -2376,8 +1961,7 @@ export default function App() {
 
               <div
                 className={`flex flex-col gap-6 ${
-                  activeSection.boardPlacement ===
-                  "left"
+                  activeSection.boardPlacement === "left"
                     ? "md:flex-row-reverse"
                     : "md:flex-row"
                 }`}
@@ -2401,17 +1985,11 @@ export default function App() {
 
                 {activeSection.showBoardPanel &&
                   (activeSection.showPieceValueTable ? (
-                    <div
-                      className="relative shrink-0"
-                      style={{ width: 220 }}
-                    >
+                    <div className="relative shrink-0" style={{ width: 220 }}>
                       <table className="w-full border border-gray-300 text-left text-xs text-gray-700">
                         <thead className="bg-gray-100">
                           <tr>
-                            {(
-                              editorTableGrid[0] ??
-                              []
-                            ).map((h, i) => (
+                            {(editorTableGrid[0] ?? []).map((h, i) => (
                               <th
                                 key={`ph-${i}`}
                                 className="border border-gray-300 px-2 py-1.5"
@@ -2422,159 +2000,98 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {editorTableGrid
-                            .slice(1)
-                            .map((row, ri) => (
-                              <tr
-                                key={`pr-${ri}`}
-                              >
-                                {row.map(
-                                  (cell, ci) => (
-                                    <td
-                                      key={`pc-${ri}-${ci}`}
-                                      className="border border-gray-300 px-2 py-1.5"
-                                    >
-                                      {cell}
-                                    </td>
-                                  )
-                                )}
-                              </tr>
-                            ))}
+                          {editorTableGrid.slice(1).map((row, ri) => (
+                            <tr key={`pr-${ri}`}>
+                              {row.map((cell, ci) => (
+                                <td
+                                  key={`pc-${ri}-${ci}`}
+                                  className="border border-gray-300 px-2 py-1.5"
+                                >
+                                  {cell}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
                         </tbody>
                       </table>
                     </div>
                   ) : (
                     <div
                       className="relative shrink-0"
-                      style={{
-                        width: 220,
-                        height: 220,
-                      }}
+                      style={{ width: 220, height: 220 }}
                     >
-                      <svg
-                        viewBox="0 0 200 200"
-                        className="h-full w-full"
-                      >
-                        <rect
-                          width={200}
-                          height={200}
-                          fill="#769656"
-                        />
+                      <svg viewBox="0 0 200 200" className="h-full w-full">
+                        <rect width={200} height={200} fill="#769656" />
                         <g fill="#eeeed2">
-                          {lightSquarePositions.map(
-                            (sq) => (
-                              <rect
-                                key={`${sq.x}-${sq.y}`}
-                                width={svgSqSize}
-                                height={svgSqSize}
-                                x={sq.x}
-                                y={sq.y}
-                              />
-                            )
-                          )}
-                        </g>
-                        {activeSection.highlights.map(
-                          (h) => {
-                            const { x, y } =
-                              squareToCoordSVG(
-                                h.square
-                              );
-                            return (
-                              <rect
-                                key={h.id}
-                                x={x}
-                                y={y}
-                                width={svgSqSize}
-                                height={svgSqSize}
-                                fill={h.color}
-                                fillOpacity={
-                                  h.opacity
-                                }
-                              />
-                            );
-                          }
-                        )}
-                        {activeSection.pieces.map(
-                          (p) => {
-                            const {
-                              centerX,
-                              centerY,
-                            } =
-                              squareToCoordSVG(
-                                p.square
-                              );
-                            return (
-                              <text
-                                key={p.id}
-                                x={centerX}
-                                y={centerY}
-                                fontSize="20"
-                                fill={
-                                  p.side ===
-                                  "white"
-                                    ? "white"
-                                    : "black"
-                                }
-                                textAnchor="middle"
-                                dominantBaseline="central"
-                              >
-                                {
-                                  pieceSymbols[
-                                    p.side
-                                  ][p.type]
-                                }
-                              </text>
-                            );
-                          }
-                        )}
-                        {activeSection.arrows.map(
-                          (a) => (
-                            <ArrowPolygonSVG
-                              key={a.id}
-                              arrow={a}
-                              idPrefix="pv"
+                          {lightSquarePositions.map((sq) => (
+                            <rect
+                              key={`${sq.x}-${sq.y}`}
+                              width={svgSqSize}
+                              height={svgSqSize}
+                              x={sq.x}
+                              y={sq.y}
                             />
-                          )
-                        )}
+                          ))}
+                        </g>
+                        {activeSection.highlights.map((h) => {
+                          const { x, y } = squareToCoordSVG(h.square);
+                          return (
+                            <rect
+                              key={h.id}
+                              x={x}
+                              y={y}
+                              width={svgSqSize}
+                              height={svgSqSize}
+                              fill={h.color}
+                              fillOpacity={h.opacity}
+                            />
+                          );
+                        })}
+                        {activeSection.pieces.map((p) => {
+                          const { centerX, centerY } = squareToCoordSVG(p.square);
+                          return (
+                            <text
+                              key={p.id}
+                              x={centerX}
+                              y={centerY}
+                              fontSize="20"
+                              fill={p.side === "white" ? "white" : "black"}
+                              textAnchor="middle"
+                              dominantBaseline="central"
+                            >
+                              {pieceSymbols[p.side][p.type]}
+                            </text>
+                          );
+                        })}
+                        {activeSection.arrows.map((a) => (
+                          <ArrowPolygonSVG key={a.id} arrow={a} idPrefix="pv" />
+                        ))}
                       </svg>
 
                       {/* Hint dots in preview */}
                       <div className="pointer-events-none absolute inset-0">
-                        {activeSection.moveHints.map(
-                          (square) => {
-                            const pos =
-                              squareToHintPosition(
-                                square
-                              );
-                            const isCapture =
-                              activeSection.pieces.some(
-                                (p) =>
-                                  p.square ===
-                                  square
-                              );
-                            return (
-                              <div
-                                key={`pvh-${square}`}
-                                className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${
-                                  isCapture
-                                    ? "border-[3px] border-black/30 bg-transparent"
-                                    : "bg-black/30"
-                                }`}
-                                style={{
-                                  left: pos.left,
-                                  top: pos.top,
-                                  width: isCapture
-                                    ? 22
-                                    : 10,
-                                  height:
-                                    isCapture
-                                      ? 22
-                                      : 10,
-                                }}
-                              />
-                            );
-                          }
-                        )}
+                        {activeSection.moveHints.map((square) => {
+                          const pos = squareToHintPosition(square);
+                          const isCapture = activeSection.pieces.some(
+                            (p) => p.square === square
+                          );
+                          return (
+                            <div
+                              key={`pvh-${square}`}
+                              className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full ${
+                                isCapture
+                                  ? "border-[3px] border-black/30 bg-transparent"
+                                  : "bg-black/30"
+                              }`}
+                              style={{
+                                left: pos.left,
+                                top: pos.top,
+                                width: isCapture ? 22 : 10,
+                                height: isCapture ? 22 : 10,
+                              }}
+                            />
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
@@ -2590,35 +2107,24 @@ export default function App() {
                   HTML
                 </span>
                 <span className="text-[10px] text-stone-500">
-                  {outputCode.length.toLocaleString()}{" "}
-                  chars
+                  {outputCode.length.toLocaleString()} chars
                 </span>
               </div>
               <div className="flex items-center gap-2">
                 <select
                   value={outputMode}
                   onChange={(e) =>
-                    setOutputMode(
-                      e.target.value as
-                        | "pretty"
-                        | "minified"
-                    )
+                    setOutputMode(e.target.value as "pretty" | "minified")
                   }
                   className="rounded border border-stone-600 bg-stone-700 px-2 py-1 text-[11px] font-semibold text-stone-200 outline-none"
                 >
-                  <option value="pretty">
-                    Pretty
-                  </option>
-                  <option value="minified">
-                    Minified
-                  </option>
+                  <option value="pretty">Pretty</option>
+                  <option value="minified">Minified</option>
                 </select>
                 <button
                   onClick={copyCode}
                   className={`rounded px-3 py-1 text-[11px] font-bold text-white transition ${
-                    copied
-                      ? "bg-emerald-600"
-                      : "bg-[#81b64c] hover:bg-[#6da03d]"
+                    copied ? "bg-emerald-600" : "bg-[#81b64c] hover:bg-[#6da03d]"
                   }`}
                 >
                   {copied ? "✓ Tersalin!" : "📋 Copy"}
