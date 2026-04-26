@@ -69,8 +69,76 @@ export default function App() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [fenInput, setFenInput] = useState("");
   const [showFenInput, setShowFenInput] = useState(false);
+  const [lastSaved, setLastSaved] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tabsScrollRef = useRef<HTMLDivElement>(null);
+
+  // ─── LocalStorage: Load on mount ─────────────────────────────────────
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("chess-article-data");
+      if (raw) {
+        const data = JSON.parse(raw);
+        if (Array.isArray(data.sections) && data.sections.length > 0) {
+          const migrated = data.sections.map((s: SectionData, i: number) => ({
+            ...createDefaultSection(s.id),
+            ...s,
+            sectionNumber: String(i + 1),
+            boardFlipped: s.boardFlipped ?? false,
+            boardTheme: (s.boardTheme as BoardTheme) || "green",
+            moveHints: [],
+            hintSourceSquare: null,
+          }));
+          setSections(migrated);
+          setActiveSectionId(data.activeSectionId ?? migrated[0]?.id ?? 1);
+          setLastSaved(data.savedAt ? new Date(data.savedAt).toLocaleString("id-ID") : null);
+          setStatusMessage("Data dimuat dari penyimpanan lokal");
+        }
+      }
+    } catch {
+      // ignore corrupt localStorage
+    }
+  }, []);
+
+  // ─── LocalStorage: Auto-save ─────────────────────────────────────────
+  useEffect(() => {
+    const payload = {
+      sections,
+      activeSectionId,
+      savedAt: new Date().toISOString(),
+    };
+    try {
+      localStorage.setItem("chess-article-data", JSON.stringify(payload));
+      setLastSaved(new Date().toLocaleString("id-ID"));
+    } catch {
+      // storage full or disabled
+    }
+  }, [sections, activeSectionId]);
+
+  const resetToDefault = useCallback(() => {
+    if (!confirm("Yakin hapus semua data dan mulai dari awal?")) return;
+    const fresh = [{
+      id: 1, sectionNumber: "1", sectionTitle: "PION (Pawn)",
+      description: "Kunci Utama: Pion adalah jiwa permainan catur. Mereka menentukan karakter posisi, membatasi gerakan bidak lawan, dan seringkali menjadi faktor penentu dalam endgame.",
+      movementTitle: "Gerakan:",
+      movementText: "Maju 1 kotak ke depan\nLangkah PERTAMA boleh maju 2 kotak\nMakan secara DIAGONAL (serong 1 kotak ke depan)",
+      boardPlacement: "right" as const, showPieceValueTable: false, showBoardPanel: true,
+      tableColumnCount: 3, tableRowCount: 7,
+      tableRowsText: "Bidak|Nilai|Perbandingan\n♟ Pion|1|Satuan dasar\n♞ Kuda|3|= 3 Pion\n♗ Gajah|3|= 3 Pion\n♖ Benteng|5|= 5 Pion\n♕ Ratu|9|= 9 Pion (terkuat)\n♔ Raja|∞|Tak ternilai",
+      pieces: createStartingPosition(),
+      highlights: [
+        ...files.map(f => ({ id: uid(), square: `${f}7`, color: "#facc15", opacity: 0.45 })),
+        ...files.map(f => ({ id: uid(), square: `${f}2`, color: "#facc15", opacity: 0.45 })),
+      ],
+      arrows: [], moveHints: [], hintSourceSquare: null,
+      boardFlipped: false, boardTheme: "green" as BoardTheme,
+    }];
+    setSections(fresh);
+    setActiveSectionId(1);
+    localStorage.removeItem("chess-article-data");
+    setLastSaved(null);
+    setStatusMessage("Data direset ke default");
+  }, []);
 
   const activeSection = sections.find(s => s.id === activeSectionId) ?? sections[0];
 
@@ -432,6 +500,15 @@ export default function App() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {lastSaved && (
+              <span className="shrink-0 rounded bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-600">
+                💾 Tersimpan {lastSaved}
+              </span>
+            )}
+            <button onClick={resetToDefault}
+              className="shrink-0 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm font-bold text-red-500 shadow-sm transition hover:bg-red-100">
+              🔄 Reset
+            </button>
             <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) importJSON(f); e.target.value = ""; }} />
             <button onClick={() => fileInputRef.current?.click()}
               className="shrink-0 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-stone-50">
@@ -481,10 +558,6 @@ export default function App() {
                 )}
               </div>
             ))}
-            <button onClick={addSection}
-              className="shrink-0 rounded border border-dashed border-[#81b64c] bg-green-50 px-3 py-1.5 text-xs font-bold text-[#81b64c] transition hover:bg-green-100 whitespace-nowrap">
-              + Tambah
-            </button>
           </div>
           <button
             onClick={() => tabsScrollRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
@@ -492,6 +565,10 @@ export default function App() {
             title="Scroll kanan"
           >
             ›
+          </button>
+          <button onClick={addSection}
+            className="shrink-0 rounded border border-dashed border-[#81b64c] bg-green-50 px-3 py-1.5 text-xs font-bold text-[#81b64c] transition hover:bg-green-100 whitespace-nowrap">
+            + Tambah
           </button>
         </div>
 
