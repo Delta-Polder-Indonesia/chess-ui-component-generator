@@ -5,9 +5,9 @@ Struktur folder ini dirancang untuk menjaga proyek frontend tetap **rapi**, **mu
  
 ## 📂 Struktur Folder Proyek
 ```bash
-frontend/
-├──.github
-│   └── workflows/               # Github Pages
+📁 frontend/
+├──📁 .github
+│   └──📁 workflows/             # Github Pages ( Github action )
 ├──📁 node_modules/              # Dependency hasil install npm/pnpm
 ├──📁 public/                    # File statis (favicon, index.html, dll) yang disajikan langsung
 ├──📁 src/                       # Source code utama aplikasi
@@ -34,8 +34,8 @@ frontend/
 ## 📁 Penjelasan Folder Github Pages
  ```bash
 └──📁.github
-    └──📁 workflows/                # Github Pages
-        └──📄 deploy.yml            # </>
+    └──📁 workflows/              # Github Pages
+        └──📄 deploy.yml          # </>
  ```
  ```bash
 name: Deploy to GitHub Pages
