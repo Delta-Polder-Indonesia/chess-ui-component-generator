@@ -131,7 +131,11 @@ function getPseudoLegalMoves(piece: Piece, pieces: Piece[]) {
     if (isInsideBoard(fileIndex, rank + dir) && !occupied.has(oneStep)) {
       results.push(oneStep);
       const twoStep = toSquare(fileIndex, rank + dir * 2);
-      if (rank === startRank && isInsideBoard(fileIndex, rank + dir * 2) && !occupied.has(twoStep)) {
+      if (
+        rank === startRank &&
+        isInsideBoard(fileIndex, rank + dir * 2) &&
+        !occupied.has(twoStep)
+      ) {
         results.push(twoStep);
       }
     }
@@ -147,10 +151,7 @@ function getPseudoLegalMoves(piece: Piece, pieces: Piece[]) {
     return results;
   }
 
-  const pushIfValid = (
-    targetFile: number,
-    targetRank: number
-  ) => {
+  const pushIfValid = (targetFile: number, targetRank: number) => {
     if (!isInsideBoard(targetFile, targetRank)) return;
     const target = toSquare(targetFile, targetRank);
     const blocker = occupied.get(target);
@@ -165,8 +166,14 @@ function getPseudoLegalMoves(piece: Piece, pieces: Piece[]) {
 
   if (piece.type === "knight") {
     [
-      [1, 2], [2, 1], [2, -1], [1, -2],
-      [-1, -2], [-2, -1], [-2, 1], [-1, 2],
+      [1, 2],
+      [2, 1],
+      [2, -1],
+      [1, -2],
+      [-1, -2],
+      [-2, -1],
+      [-2, 1],
+      [-1, 2],
     ].forEach(([dx, dy]) => pushIfValid(fileIndex + dx, rank + dy));
     return results;
   }
@@ -403,19 +410,14 @@ function InteractiveBoard({
     [pieces]
   );
 
-  // Build a Set of highlight squares for O(1) lookup
   const highlightMap = useMemo(() => {
     const map = new Map<string, Highlight>();
     highlights.forEach((h) => map.set(h.square, h));
     return map;
   }, [highlights]);
 
-  // Build a Set of hint squares for O(1) lookup
-  const hintSet = useMemo(() => new Set(moveHints), [moveHints]);
-
   return (
     <div className="inline-block select-none">
-      {/* File labels top */}
       <div className="flex" style={{ paddingLeft: 18 }}>
         {files.map((f) => (
           <div
@@ -428,7 +430,6 @@ function InteractiveBoard({
         ))}
       </div>
       <div className="flex">
-        {/* Rank labels left */}
         <div className="flex flex-col">
           {ranks.map((r) => (
             <div
@@ -441,12 +442,7 @@ function InteractiveBoard({
           ))}
         </div>
 
-        {/* Board area */}
-        <div
-          className="relative"
-          style={{ width: boardSize, height: boardSize }}
-        >
-          {/* Square grid */}
+        <div className="relative" style={{ width: boardSize, height: boardSize }}>
           <div
             className="grid border border-stone-400"
             style={{
@@ -463,8 +459,6 @@ function InteractiveBoard({
                 const isArrowSrc = arrowStart === square;
                 const isArrowTgt = arrowPreview === square && arrowStart !== null;
                 const hl = highlightMap.get(square);
-
-                // BUG FIX: Only highlight the SOURCE square of the hint, not all pieces
                 const isSelectedSource = hintSourceSquare === square;
 
                 let bg = isLight ? "#eeeed2" : "#769656";
@@ -510,16 +504,14 @@ function InteractiveBoard({
                           setArrowStart(square);
                           setArrowPreview(null);
                         } else {
-                          if (arrowStart !== square)
-                            onArrowDraw(arrowStart, square);
+                          if (arrowStart !== square) onArrowDraw(arrowStart, square);
                           setArrowStart(null);
                           setArrowPreview(null);
                         }
                       }
                     }}
                     onMouseEnter={() => {
-                      if (editMode === "arrow" && arrowStart)
-                        setArrowPreview(square);
+                      if (editMode === "arrow" && arrowStart) setArrowPreview(square);
                     }}
                     onContextMenu={(e) => {
                       e.preventDefault();
@@ -527,7 +519,6 @@ function InteractiveBoard({
                       if (p) onPieceRemove(p.id);
                     }}
                   >
-                    {/* Highlight overlay */}
                     {hl && (
                       <div
                         className="pointer-events-none absolute inset-0"
@@ -538,12 +529,10 @@ function InteractiveBoard({
                       />
                     )}
 
-                    {/* BUG FIX: Only show yellow overlay on the actual source square */}
                     {isSelectedSource && (
                       <div className="pointer-events-none absolute inset-0 bg-yellow-400/40" />
                     )}
 
-                    {/* Piece */}
                     {piece && (
                       <span
                         draggable
@@ -574,7 +563,6 @@ function InteractiveBoard({
             )}
           </div>
 
-          {/* Move hint dots */}
           <div className="pointer-events-none absolute inset-0">
             {moveHints.map((square) => {
               const pos = squareToHintPosition(square);
@@ -587,16 +575,12 @@ function InteractiveBoard({
                       ? "h-[34px] w-[34px] border-[5px] border-black/30 bg-transparent"
                       : "h-3 w-3 bg-black/30"
                   }`}
-                  style={{
-                    left: pos.left,
-                    top: pos.top,
-                  }}
+                  style={{ left: pos.left, top: pos.top }}
                 />
               );
             })}
           </div>
 
-          {/* Arrow overlay */}
           <svg
             viewBox="0 0 200 200"
             className="pointer-events-none absolute inset-0 z-20 h-full w-full"
@@ -607,7 +591,6 @@ function InteractiveBoard({
           </svg>
         </div>
 
-        {/* Rank labels right */}
         <div className="flex flex-col">
           {ranks.map((r) => (
             <div
@@ -620,7 +603,6 @@ function InteractiveBoard({
           ))}
         </div>
       </div>
-      {/* File labels bottom */}
       <div className="flex" style={{ paddingLeft: 18 }}>
         {files.map((f) => (
           <div
@@ -641,7 +623,14 @@ function InteractiveBoard({
 function createStartingPosition(): Piece[] {
   const p: Piece[] = [];
   const backRank: PieceType[] = [
-    "rook", "knight", "bishop", "queen", "king", "bishop", "knight", "rook",
+    "rook",
+    "knight",
+    "bishop",
+    "queen",
+    "king",
+    "bishop",
+    "knight",
+    "rook",
   ];
   for (let i = 0; i < 8; i++) {
     p.push({ id: uid(), square: `${files[i]}1`, side: "white", type: backRank[i] });
@@ -671,8 +660,6 @@ function resizeTableGrid(grid: string[][], rowCount: number, colCount: number) {
 function stringifyTableGrid(grid: string[][]) {
   return grid.map((row) => row.map((c) => c.trim()).join("|")).join("\n");
 }
-
-// ─── SVG Board as standalone (for export) ──────────────────────────────
 
 function generateStandaloneSVG(sec: SectionData): string {
   const lightRects = lightSquarePositions
@@ -818,8 +805,6 @@ export default function App() {
     setStatusMessage("Bagian diduplikasi");
   }
 
-  // ─── Board Handlers ─────────────────────────────────────────────────
-
   function handlePieceDrop(side: PieceSide, type: PieceType, square: string) {
     const prev = activeSection.pieces;
     const idx = prev.findIndex((p) => p.square === square);
@@ -851,7 +836,8 @@ export default function App() {
 
   function handlePieceRemove(pieceId: number) {
     const removedPiece = activeSection.pieces.find((p) => p.id === pieceId);
-    const wasSource = removedPiece && removedPiece.square === activeSection.hintSourceSquare;
+    const wasSource =
+      removedPiece && removedPiece.square === activeSection.hintSourceSquare;
     updateSection(activeSectionId, {
       pieces: activeSection.pieces.filter((p) => p.id !== pieceId),
       moveHints: wasSource ? [] : activeSection.moveHints,
@@ -903,7 +889,6 @@ export default function App() {
     if (editMode !== "piece") return;
     const selectedPiece = activeSection.pieces.find((p) => p.square === square);
 
-    // Clicked on empty square -> clear hints
     if (!selectedPiece) {
       updateSection(activeSectionId, {
         moveHints: [],
@@ -912,7 +897,6 @@ export default function App() {
       return;
     }
 
-    // Clicked on the same source again -> toggle off
     if (activeSection.hintSourceSquare === square) {
       updateSection(activeSectionId, {
         moveHints: [],
@@ -921,7 +905,6 @@ export default function App() {
       return;
     }
 
-    // Clicked on a different piece -> show its moves
     const hints = getPseudoLegalMoves(selectedPiece, activeSection.pieces);
     updateSection(activeSectionId, {
       moveHints: hints,
@@ -932,7 +915,7 @@ export default function App() {
     );
   }
 
-  // ─── Code Generation ────────────────────────────────────────────────
+  // ─── Code Generation (FIXED: proper spacing between text and panel) ─
 
   function generateSVG(sec: SectionData) {
     const lightRects = lightSquarePositions
@@ -1053,7 +1036,7 @@ export default function App() {
         if (sec.showBoardPanel) {
           if (sec.showPieceValueTable) {
             sidePanelBlock = [
-              `                <div class="board-container relative">`,
+              `                <div class="board-panel">`,
               generateTableHtml(sec),
               `                </div>`,
             ].join("\n");
@@ -1061,7 +1044,7 @@ export default function App() {
             const svgBlock = generateSVG(sec);
             const hintLayer = generateHintLayer(sec);
             sidePanelBlock = [
-              `                <div class="board-container relative">`,
+              `                <div class="board-panel relative">`,
               svgBlock,
               hintLayer,
               `                </div>`,
@@ -1074,24 +1057,26 @@ export default function App() {
         return [
           ``,
           `            <!-- Section ${escapeHtml(sec.sectionNumber)} -->`,
-          `            <div class="flex items-center gap-4 mb-4">`,
-          `                <span class="section-number text-3xl">${escapeHtml(sec.sectionNumber)}</span>`,
-          `                <h3 class="text-2xl font-extrabold text-chess-green uppercase mb-3 leading-tight">${escapeHtml(sec.sectionTitle)}</h3>`,
-          `            </div>`,
-          ``,
-          `            <p class="text-gray-600 mb-8 leading-snug">`,
-          `                ${escapeHtml(sec.description)}`,
-          `            </p>`,
-          ``,
-          `            <div class="flex flex-col ${flexDir} gap-8 mb-10">`,
-          `                <div class="flex-1">`,
-          `                    <h3 class="text-2xl font-extrabold text-chess-green uppercase mb-3 leading-tight">${escapeHtml(sec.movementTitle)}</h3>`,
-          `                    <p class="text-gray-600 leading-relaxed text-sm">`,
-          `                        ${movHtml}`,
-          `                    </p>`,
+          `            <div class="section-block">`,
+          `                <div class="flex items-center gap-4 mb-4">`,
+          `                    <span class="section-number text-3xl">${escapeHtml(sec.sectionNumber)}</span>`,
+          `                    <h3 class="text-2xl font-extrabold text-chess-green uppercase leading-tight">${escapeHtml(sec.sectionTitle)}</h3>`,
           `                </div>`,
           ``,
+          `                <p class="text-gray-600 mb-6 leading-snug">`,
+          `                    ${escapeHtml(sec.description)}`,
+          `                </p>`,
+          ``,
+          `                <div class="content-row ${flexDir}">`,
+          `                    <div class="text-content">`,
+          `                        <h3 class="text-xl font-extrabold text-chess-green uppercase mb-3 leading-tight">${escapeHtml(sec.movementTitle)}</h3>`,
+          `                        <p class="text-gray-600 leading-relaxed text-sm">`,
+          `                            ${movHtml}`,
+          `                        </p>`,
+          `                    </div>`,
+          ``,
           sidePanelBlock,
+          `                </div>`,
           `            </div>`,
         ].join("\n");
       })
@@ -1109,11 +1094,47 @@ export default function App() {
       `    <style>`,
       `        body { font-family: 'Nunito', sans-serif; background-color: #f1f1f1; color: #312e2b; }`,
       `        .header-bg { background-color: #81b64c; }`,
-      `        .section-number { background-color: #81b64c; color: white; padding: 2px 10px; border-radius: 4px; font-weight: 800; }`,
+      `        .section-number { background-color: #81b64c; color: white; padding: 2px 10px; border-radius: 4px; font-weight: 800; display: inline-block; }`,
       `        .text-chess-green { color: #81b64c; }`,
-      `        .board-container { width: 220px; height: 220px; flex-shrink: 0; position: relative; }`,
+      ``,
+      `        /* Section spacing */`,
+      `        .section-block { margin-bottom: 2.5rem; padding-bottom: 2rem; border-bottom: 1px solid #e5e7eb; }`,
+      `        .section-block:last-child { border-bottom: none; margin-bottom: 0; }`,
+      ``,
+      `        /* Content row: text + panel side by side */`,
+      `        .content-row {`,
+      `            display: flex;`,
+      `            flex-direction: column;`,
+      `            gap: 1.5rem;`,
+      `        }`,
+      `        @media (min-width: 768px) {`,
+      `            .content-row { flex-direction: row; gap: 2rem; align-items: flex-start; }`,
+      `            .content-row.md\\:flex-row-reverse { flex-direction: row-reverse; }`,
+      `        }`,
+      ``,
+      `        /* Text side */`,
+      `        .text-content {`,
+      `            flex: 1;`,
+      `            min-width: 0;`,
+      `        }`,
+      ``,
+      `        /* Board / table panel */`,
+      `        .board-panel {`,
+      `            width: 220px;`,
+      `            height: 220px;`,
+      `            flex-shrink: 0;`,
+      `            position: relative;`,
+      `        }`,
+      ``,
+      `        /* Hint dots overlay */`,
       `        .hint-layer { position: absolute; inset: 0; pointer-events: none; }`,
-      `        .hint { position: absolute; width: 14px; height: 14px; border-radius: 9999px; transform: translate(-50%, -50%); background: rgba(0,0,0,0.3); }`,
+      `        .hint {`,
+      `            position: absolute;`,
+      `            width: 14px; height: 14px;`,
+      `            border-radius: 9999px;`,
+      `            transform: translate(-50%, -50%);`,
+      `            background: rgba(0,0,0,0.3);`,
+      `        }`,
       `    </style>`,
       `</head>`,
       `<body class="p-0 m-0">`,
@@ -1152,7 +1173,11 @@ export default function App() {
         activeSection.tableRowCount,
         activeSection.tableColumnCount
       ),
-    [activeSection.tableColumnCount, activeSection.tableRowCount, activeSection.tableRowsText]
+    [
+      activeSection.tableColumnCount,
+      activeSection.tableRowCount,
+      activeSection.tableRowsText,
+    ]
   );
 
   function updateTableShape(nextRows: number, nextCols: number) {
@@ -1207,15 +1232,8 @@ export default function App() {
         private: true,
         version: "1.0.0",
         type: "module",
-        scripts: {
-          dev: "vite",
-          build: "vite build",
-          preview: "vite preview",
-        },
-        dependencies: {
-          react: "^19.0.0",
-          "react-dom": "^19.0.0",
-        },
+        scripts: { dev: "vite", build: "vite build", preview: "vite preview" },
+        dependencies: { react: "^19.0.0", "react-dom": "^19.0.0" },
         devDependencies: {
           typescript: "^5.0.0",
           vite: "^6.0.0",
@@ -1226,7 +1244,10 @@ export default function App() {
       };
 
       root.file("package.json", JSON.stringify(packageJson, null, 2));
-      root.file(".gitignore", ["node_modules", "dist", ".DS_Store", "*.log"].join("\n"));
+      root.file(
+        ".gitignore",
+        ["node_modules", "dist", ".DS_Store", "*.log"].join("\n")
+      );
       root.file(
         "README.md",
         [
@@ -1239,11 +1260,6 @@ export default function App() {
           "npm install",
           "npm run dev",
           "```",
-          "",
-          "## Files",
-          "- `index.html` — Full article HTML",
-          "- `boards/` — Individual SVG board files",
-          "- `src/` — React source (wraps article in iframe)",
         ].join("\n")
       );
 
@@ -1255,10 +1271,7 @@ export default function App() {
           'import tailwindcss from "@tailwindcss/vite";',
           "",
           "export default defineConfig({",
-          "  plugins: [",
-          "    react(),",
-          "    tailwindcss(),",
-          "  ],",
+          "  plugins: [react(), tailwindcss()],",
           "  base: './',",
           "});",
         ].join("\n")
@@ -1303,9 +1316,7 @@ export default function App() {
           'import App from "./App";',
           "",
           'createRoot(document.getElementById("root")!).render(',
-          "  <StrictMode>",
-          "    <App />",
-          "  </StrictMode>",
+          "  <StrictMode><App /></StrictMode>",
           ");",
         ].join("\n")
       );
@@ -1315,11 +1326,8 @@ export default function App() {
           "export default function App() {",
           "  return (",
           '    <div className="min-h-screen bg-gray-100">',
-          "      <iframe",
-          '        title="Chess Article"',
-          '        src="/chess-article.html"',
-          '        className="mx-auto block h-screen w-full max-w-4xl border-0"',
-          "      />",
+          '      <iframe title="Chess Article" src="/chess-article.html"',
+          '        className="mx-auto block h-screen w-full max-w-4xl border-0" />',
           "    </div>",
           "  );",
           "}",
@@ -1330,17 +1338,12 @@ export default function App() {
         "index-dev.html",
         [
           "<!doctype html>",
-          '<html lang="id">',
-          "  <head>",
-          '    <meta charset="UTF-8" />',
-          '    <meta name="viewport" content="width=device-width, initial-scale=1.0" />',
-          "    <title>Chess Article Viewer</title>",
-          "  </head>",
-          "  <body>",
-          '    <div id="root"></div>',
-          '    <script type="module" src="/src/main.tsx"></script>',
-          "  </body>",
-          "</html>",
+          '<html lang="id"><head><meta charset="UTF-8"/>',
+          '<meta name="viewport" content="width=device-width, initial-scale=1.0"/>',
+          "<title>Chess Article Viewer</title></head><body>",
+          '<div id="root"></div>',
+          '<script type="module" src="/src/main.tsx"></script>',
+          "</body></html>",
         ].join("\n")
       );
 
@@ -1386,7 +1389,7 @@ export default function App() {
   return (
     <main className="min-h-screen bg-stone-100 px-3 py-6 text-slate-900 md:px-6">
       <div className="mx-auto w-full max-w-7xl space-y-5">
-        {/* ── Header ──────────────────────────────────── */}
+        {/* Header */}
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black uppercase tracking-tight text-[#2f5f2a] md:text-4xl">
@@ -1416,7 +1419,7 @@ export default function App() {
           </div>
         </header>
 
-        {/* ── Section Tabs ────────────────────────────── */}
+        {/* Section Tabs */}
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-300 bg-white p-2.5 shadow-sm">
           <span className="text-xs font-bold uppercase text-slate-400">Bagian:</span>
           {sections.map((sec) => (
@@ -1441,7 +1444,7 @@ export default function App() {
           </button>
         </div>
 
-        {/* ── Editor + Board ──────────────────────────── */}
+        {/* Editor + Board */}
         <section className="grid gap-5 lg:grid-cols-[1fr_auto]">
           {/* Left: Editor */}
           <div className="space-y-3 rounded-lg border border-stone-300 bg-white p-4 shadow-sm">
@@ -1465,7 +1468,6 @@ export default function App() {
               </div>
             </div>
 
-            {/* Form */}
             <div className="grid gap-3 md:grid-cols-2">
               <label className="block space-y-1">
                 <span className="text-[11px] font-bold text-slate-500">Nomor</span>
@@ -1854,7 +1856,6 @@ export default function App() {
               Bidak Putih
             </p>
 
-            {/* Table Editor (when table mode) */}
             {activeSection.showBoardPanel && activeSection.showPieceValueTable && (
               <div className="w-full space-y-2 border-t border-stone-200 pt-3">
                 <p className="text-[11px] font-bold text-slate-500">Editor Tabel</p>
@@ -1929,19 +1930,16 @@ export default function App() {
           </div>
         </section>
 
-        {/* ── Preview + Code ──────────────────────────── */}
+        {/* Preview + Code */}
         <section className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
           {/* Preview */}
           <article className="overflow-hidden rounded-lg border border-stone-300 bg-white shadow-sm">
             <div className="bg-[#81b64c] px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-white">
-              Preview (220×220)
+              Preview
             </div>
             <div
               className="p-6"
-              style={{
-                fontFamily: "'Nunito', sans-serif",
-                color: "#312e2b",
-              }}
+              style={{ fontFamily: "'Nunito', sans-serif", color: "#312e2b" }}
             >
               <div className="mb-4 flex items-center gap-3">
                 <span className="rounded bg-[#81b64c] px-2.5 py-0.5 text-2xl font-extrabold text-white">
@@ -1965,8 +1963,9 @@ export default function App() {
                     ? "md:flex-row-reverse"
                     : "md:flex-row"
                 }`}
+                style={{ alignItems: "flex-start" }}
               >
-                <div className="flex-1">
+                <div className="min-w-0 flex-1">
                   <h4
                     className="mb-2 text-lg font-extrabold uppercase leading-tight"
                     style={{ color: "#81b64c" }}
@@ -1985,7 +1984,7 @@ export default function App() {
 
                 {activeSection.showBoardPanel &&
                   (activeSection.showPieceValueTable ? (
-                    <div className="relative shrink-0" style={{ width: 220 }}>
+                    <div className="shrink-0" style={{ width: 220 }}>
                       <table className="w-full border border-gray-300 text-left text-xs text-gray-700">
                         <thead className="bg-gray-100">
                           <tr>
@@ -2068,7 +2067,6 @@ export default function App() {
                         ))}
                       </svg>
 
-                      {/* Hint dots in preview */}
                       <div className="pointer-events-none absolute inset-0">
                         {activeSection.moveHints.map((square) => {
                           const pos = squareToHintPosition(square);
