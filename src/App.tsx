@@ -70,6 +70,7 @@ export default function App() {
   const [fenInput, setFenInput] = useState("");
   const [showFenInput, setShowFenInput] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
 
   const activeSection = sections.find(s => s.id === activeSectionId) ?? sections[0];
 
@@ -452,25 +453,45 @@ export default function App() {
         </header>
 
         {/* Section Tabs */}
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-300 bg-white p-2.5 shadow-sm">
-          <span className="text-xs font-bold uppercase text-slate-400">Bagian:</span>
-          {sections.map((sec, idx) => (
-            <div key={sec.id} className="flex items-center gap-0.5">
-              <button onClick={() => setActiveSectionId(sec.id)}
-                className={`rounded px-3 py-1.5 text-xs font-bold transition ${activeSectionId === sec.id ? "bg-[#81b64c] text-white shadow" : "bg-stone-100 text-slate-600 hover:bg-stone-200"}`}>
-                {sec.sectionNumber}. {sec.sectionTitle.substring(0, 18)}{sec.sectionTitle.length > 18 ? "…" : ""}
-              </button>
-              {activeSectionId === sec.id && sections.length > 1 && (
-                <>
-                  <button onClick={() => moveSection(sec.id, "up")} disabled={idx === 0} className="rounded bg-stone-100 px-1 py-1 text-[10px] text-slate-500 hover:bg-stone-200 disabled:opacity-30" title="Naik">↑</button>
-                  <button onClick={() => moveSection(sec.id, "down")} disabled={idx === sections.length - 1} className="rounded bg-stone-100 px-1 py-1 text-[10px] text-slate-500 hover:bg-stone-200 disabled:opacity-30" title="Turun">↓</button>
-                </>
-              )}
-            </div>
-          ))}
-          <button onClick={addSection}
-            className="rounded border border-dashed border-[#81b64c] bg-green-50 px-3 py-1.5 text-xs font-bold text-[#81b64c] transition hover:bg-green-100">
-            + Tambah
+        <div className="flex items-center gap-2 rounded-lg border border-stone-300 bg-white p-2.5 shadow-sm">
+          <span className="shrink-0 text-xs font-bold uppercase text-slate-400">Bagian:</span>
+          <button
+            onClick={() => tabsScrollRef.current?.scrollBy({ left: -200, behavior: "smooth" })}
+            className="shrink-0 rounded bg-stone-100 px-1.5 py-1 text-xs font-bold text-slate-500 hover:bg-stone-200 transition"
+            title="Scroll kiri"
+          >
+            ‹
+          </button>
+          <div
+            ref={tabsScrollRef}
+            className="flex flex-1 items-center gap-2 overflow-x-auto py-0.5 scrollbar-thin"
+            style={{ scrollbarWidth: "thin", scrollbarColor: "#d6d3d1 transparent" }}
+          >
+            {sections.map((sec, idx) => (
+              <div key={sec.id} className="flex shrink-0 items-center gap-0.5">
+                <button onClick={() => setActiveSectionId(sec.id)}
+                  className={`rounded px-3 py-1.5 text-xs font-bold transition whitespace-nowrap ${activeSectionId === sec.id ? "bg-[#81b64c] text-white shadow" : "bg-stone-100 text-slate-600 hover:bg-stone-200"}`}>
+                  {sec.sectionNumber}. {sec.sectionTitle.substring(0, 18)}{sec.sectionTitle.length > 18 ? "…" : ""}
+                </button>
+                {activeSectionId === sec.id && sections.length > 1 && (
+                  <>
+                    <button onClick={() => moveSection(sec.id, "up")} disabled={idx === 0} className="rounded bg-stone-100 px-1 py-1 text-[10px] text-slate-500 hover:bg-stone-200 disabled:opacity-30" title="Naik">↑</button>
+                    <button onClick={() => moveSection(sec.id, "down")} disabled={idx === sections.length - 1} className="rounded bg-stone-100 px-1 py-1 text-[10px] text-slate-500 hover:bg-stone-200 disabled:opacity-30" title="Turun">↓</button>
+                  </>
+                )}
+              </div>
+            ))}
+            <button onClick={addSection}
+              className="shrink-0 rounded border border-dashed border-[#81b64c] bg-green-50 px-3 py-1.5 text-xs font-bold text-[#81b64c] transition hover:bg-green-100 whitespace-nowrap">
+              + Tambah
+            </button>
+          </div>
+          <button
+            onClick={() => tabsScrollRef.current?.scrollBy({ left: 200, behavior: "smooth" })}
+            className="shrink-0 rounded bg-stone-100 px-1.5 py-1 text-xs font-bold text-slate-500 hover:bg-stone-200 transition"
+            title="Scroll kanan"
+          >
+            ›
           </button>
         </div>
 
