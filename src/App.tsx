@@ -1464,7 +1464,11 @@ export default function App() {
           'import tailwindcss from "@tailwindcss/vite";',
           "",
           "export default defineConfig({",
-          "  plugins: [react(), tailwindcss()],",
+          "  plugins: [",
+		  "  react(),",
+		   "  tailwindcss(),",
+		   "  ],",
+		  "  base: './',",
           "});",
         ].join("\n")
       );
