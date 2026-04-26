@@ -270,8 +270,6 @@ function computeArrowPolygon(fromSquare: string, toSquare: string) {
   return { points, rotation: angleDeg, cx, cy };
 }
 
-// ─── Section Data ──────────────────────────────────────────────────────
-
 type SectionData = {
   id: number;
   sectionNumber: string;
@@ -314,8 +312,6 @@ function createDefaultSection(id: number): SectionData {
     hintSourceSquare: null,
   };
 }
-
-// ─── Components ────────────────────────────────────────────────────────
 
 function PieceTray({
   side,
@@ -618,8 +614,6 @@ function InteractiveBoard({
   );
 }
 
-// ─── Helpers ───────────────────────────────────────────────────────────
-
 function createStartingPosition(): Piece[] {
   const p: Piece[] = [];
   const backRank: PieceType[] = [
@@ -702,8 +696,6 @@ function generateStandaloneSVG(sec: SectionData): string {
     .filter((s) => s.trim() !== "")
     .join("\n");
 }
-
-// ─── Main App ──────────────────────────────────────────────────────────
 
 export default function App() {
   const [sections, setSections] = useState<SectionData[]>([
@@ -820,7 +812,7 @@ export default function App() {
       moveHints: [],
       hintSourceSquare: null,
     });
-    setStatusMessage(`${side} ${type} → ${square}`);
+    setStatusMessage(`${side} ${type} -> ${square}`);
   }
 
   function handlePieceMove(pieceId: number, newSquare: string) {
@@ -831,7 +823,7 @@ export default function App() {
       moveHints: [],
       hintSourceSquare: null,
     });
-    setStatusMessage(`Bidak → ${newSquare}`);
+    setStatusMessage(`Bidak -> ${newSquare}`);
   }
 
   function handlePieceRemove(pieceId: number) {
@@ -914,8 +906,6 @@ export default function App() {
       `${selectedPiece.type} ${selectedPiece.square}: ${hints.length} langkah`
     );
   }
-
-  // ─── Code Generation (FIXED: proper spacing between text and panel) ─
 
   function generateSVG(sec: SectionData) {
     const lightRects = lightSquarePositions
@@ -1036,7 +1026,7 @@ export default function App() {
         if (sec.showBoardPanel) {
           if (sec.showPieceValueTable) {
             sidePanelBlock = [
-              `                <div class="board-panel">`,
+              `                <div class="board-panel table-panel">`,
               generateTableHtml(sec),
               `                </div>`,
             ].join("\n");
@@ -1124,6 +1114,9 @@ export default function App() {
       `            height: 220px;`,
       `            flex-shrink: 0;`,
       `            position: relative;`,
+      `        }`,
+      `        .table-panel {`,
+      `            height: auto;`,
       `        }`,
       ``,
       `        /* Hint dots overlay */`,
@@ -1384,12 +1377,9 @@ export default function App() {
     .map((l) => l.trim())
     .filter(Boolean);
 
-  // ─── Render ──────────────────────────────────────────────────────────
-
   return (
     <main className="min-h-screen bg-stone-100 px-3 py-6 text-slate-900 md:px-6">
       <div className="mx-auto w-full max-w-7xl space-y-5">
-        {/* Header */}
         <header className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-black uppercase tracking-tight text-[#2f5f2a] md:text-4xl">
@@ -1419,7 +1409,6 @@ export default function App() {
           </div>
         </header>
 
-        {/* Section Tabs */}
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-stone-300 bg-white p-2.5 shadow-sm">
           <span className="text-xs font-bold uppercase text-slate-400">Bagian:</span>
           {sections.map((sec) => (
@@ -1444,9 +1433,7 @@ export default function App() {
           </button>
         </div>
 
-        {/* Editor + Board */}
         <section className="grid gap-5 lg:grid-cols-[1fr_auto]">
-          {/* Left: Editor */}
           <div className="space-y-3 rounded-lg border border-stone-300 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-wide text-slate-400">
@@ -1575,7 +1562,6 @@ export default function App() {
               />
             </label>
 
-            {/* Edit Mode */}
             <div className="border-t border-stone-200 pt-3">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[10px] font-bold uppercase text-slate-400">Mode:</span>
@@ -1644,13 +1630,12 @@ export default function App() {
               )}
               {editMode === "piece" && (
                 <p className="mt-2 rounded bg-green-50 p-2 text-[11px] text-slate-500">
-                  Tarik dari baki → papan. Tarik di papan → pindah.{" "}
-                  <strong>Klik kanan</strong> → hapus. Klik bidak = hint langkah.
+                  Tarik dari baki → papan. Tarik di papan → pindah. <strong>Klik kanan</strong> → hapus.
+                  Klik bidak = hint langkah.
                 </p>
               )}
             </div>
 
-            {/* Quick Buttons */}
             <div className="flex flex-wrap gap-1.5">
               <button
                 onClick={() => {
@@ -1717,7 +1702,6 @@ export default function App() {
               </button>
             </div>
 
-            {/* Summary Lists */}
             <div className="grid gap-2 text-[11px] text-slate-500 md:grid-cols-3">
               <div>
                 <p className="font-bold text-slate-700">
@@ -1827,7 +1811,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Right: Board + Trays */}
           <div className="flex w-[380px] max-w-full flex-col items-center gap-2 rounded-lg border border-stone-300 bg-white p-4 shadow-sm">
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
               Bidak Hitam
@@ -1930,9 +1913,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* Preview + Code */}
         <section className="grid gap-5 lg:grid-cols-[1fr_1.2fr]">
-          {/* Preview */}
           <article className="overflow-hidden rounded-lg border border-stone-300 bg-white shadow-sm">
             <div className="bg-[#81b64c] px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-white">
               Preview
@@ -2097,7 +2078,6 @@ export default function App() {
             </div>
           </article>
 
-          {/* Code Output */}
           <article className="flex flex-col rounded-lg border border-stone-300 bg-white shadow-sm">
             <div className="flex items-center justify-between bg-stone-800 px-4 py-2.5">
               <div className="flex items-center gap-2">
