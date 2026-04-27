@@ -410,26 +410,52 @@ export default function App() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const data = JSON.parse(e.target?.result as string);
-        if (Array.isArray(data.sections)) {
-          const migrated = data.sections.map((s: SectionData, i: number) => ({
-            ...createDefaultSection(s.id),
+        const text = e.target?.result as string;
+        if (!text || !text.trim()) {
+          setStatusMessage("File JSON kosong");
+          return;
+        }
+        const data = JSON.parse(text);
+        if (!Array.isArray(data.sections) || data.sections.length === 0) {
+          setStatusMessage("Format JSON tidak valid: sections tidak ditemukan");
+          return;
+        }
+        const migrated: SectionData[] = data.sections.map((s: Partial<SectionData>, i: number) => {
+          const base = createDefaultSection(s.id ?? uid());
+          return {
+            ...base,
             ...s,
+            id: s.id ?? base.id,
             sectionNumber: String(i + 1),
-            boardFlipped: s.boardFlipped ?? false,
-            boardTheme: (s.boardTheme as BoardTheme) || "green",
+            sectionTitle: s.sectionTitle ?? base.sectionTitle,
+            description: s.description ?? base.description,
+            movementTitle: s.movementTitle ?? base.movementTitle,
+            movementText: s.movementText ?? base.movementText,
+            boardPlacement: s.boardPlacement ?? base.boardPlacement,
+            showPieceValueTable: s.showPieceValueTable ?? base.showPieceValueTable,
+            showBoardPanel: s.showBoardPanel ?? base.showBoardPanel,
+            tableColumnCount: s.tableColumnCount ?? base.tableColumnCount,
+            tableRowCount: s.tableRowCount ?? base.tableRowCount,
+            tableRowsText: s.tableRowsText ?? base.tableRowsText,
+            pieces: Array.isArray(s.pieces) ? s.pieces : base.pieces,
+            highlights: Array.isArray(s.highlights) ? s.highlights : base.highlights,
+            arrows: Array.isArray(s.arrows) ? s.arrows : base.arrows,
             moveHints: [],
             hintSourceSquare: null,
-          }));
-          setSections(migrated);
-          setActiveSectionId(migrated[0]?.id ?? 1);
-          setStatusMessage("Data berhasil di-import");
-        } else {
-          setStatusMessage("Format JSON tidak valid");
-        }
-      } catch {
-        setStatusMessage("Gagal memparse JSON");
+            boardFlipped: s.boardFlipped ?? false,
+            boardTheme: (s.boardTheme as BoardTheme) || "green",
+          };
+        });
+        setSections(migrated);
+        setActiveSectionId(migrated[0].id);
+        setStatusMessage(`Data berhasil di-import: ${migrated.length} bagian`);
+      } catch (err) {
+        console.error("Import JSON error:", err);
+        setStatusMessage("Gagal memparse JSON: " + (err instanceof Error ? err.message : "Error tidak diketahui"));
       }
+    };
+    reader.onerror = () => {
+      setStatusMessage("Gagal membaca file");
     };
     reader.readAsText(file);
   }, []);
