@@ -55,12 +55,7 @@ export default function App() {
   }]);
 
   const [activeSectionId, setActiveSectionId] = useState(1);
-  const [highlightColor, setHighlightColor] = useState("#facc15");
-  const [highlightOpacity, setHighlightOpacity] = useState(0.45);
-  const [arrowColor, setArrowColor] = useState("#ffaa00");
-  const [arrowOpacity, setArrowOpacity] = useState(0.8);
   const [dragItem, setDragItem] = useState<DragItem | null>(null);
-  const [editMode, setEditMode] = useState<"piece" | "highlight" | "arrow">("piece");
   const [outputMode, setOutputMode] = useState<"pretty" | "minified">("pretty");
   const [previewCodeView, setPreviewCodeView] = useState<"split" | "preview" | "code">("split");
   const [statusMessage, setStatusMessage] = useState("");
@@ -70,6 +65,8 @@ export default function App() {
   const [fenInput, setFenInput] = useState("");
   const [showFenInput, setShowFenInput] = useState(false);
   const [lastSaved, setLastSaved] = useState<string | null>(null);
+  const [rcHighlightColor, setRcHighlightColor] = useState("#ef4444");
+  const [rcArrowColor, setRcArrowColor] = useState("#ef4444");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const tabsScrollRef = useRef<HTMLDivElement>(null);
 
@@ -225,31 +222,30 @@ export default function App() {
     setStatusMessage("Bidak dihapus");
   }, [activeSection, activeSectionId, updateSection]);
 
-  const handleHighlightToggle = useCallback((square: string) => {
+  const handleHighlightToggle = useCallback((square: string, color: string, opacity: number) => {
     const prev = activeSection.highlights;
     const idx = prev.findIndex(h => h.square === square);
     updateSection(activeSectionId, {
-      highlights: idx >= 0 ? prev.filter((_, i) => i !== idx) : [...prev, { id: uid(), square, color: highlightColor, opacity: highlightOpacity }],
+      highlights: idx >= 0 ? prev.filter((_, i) => i !== idx) : [...prev, { id: uid(), square, color, opacity }],
     });
-  }, [activeSection, activeSectionId, highlightColor, highlightOpacity, updateSection]);
+  }, [activeSection, activeSectionId, updateSection]);
 
-  const handleArrowDraw = useCallback((from: string, to: string) => {
+  const handleArrowDraw = useCallback((from: string, to: string, color: string, opacity: number) => {
     const prev = activeSection.arrows;
     const idx = prev.findIndex(a => a.from === from && a.to === to);
     updateSection(activeSectionId, {
-      arrows: idx >= 0 ? prev.filter((_, i) => i !== idx) : [...prev, { id: uid(), from, to, color: arrowColor, opacity: arrowOpacity }],
+      arrows: idx >= 0 ? prev.filter((_, i) => i !== idx) : [...prev, { id: uid(), from, to, color, opacity }],
     });
-  }, [activeSection, activeSectionId, arrowColor, arrowOpacity, updateSection]);
+  }, [activeSection, activeSectionId, updateSection]);
 
   const handlePieceHint = useCallback((square: string) => {
-    if (editMode !== "piece") return;
     const sel = activeSection.pieces.find(p => p.square === square);
     if (!sel) { updateSection(activeSectionId, { moveHints: [], hintSourceSquare: null }); return; }
     if (activeSection.hintSourceSquare === square) { updateSection(activeSectionId, { moveHints: [], hintSourceSquare: null }); return; }
     const hints = getPseudoLegalMoves(sel, activeSection.pieces);
     updateSection(activeSectionId, { moveHints: hints, hintSourceSquare: square });
     setStatusMessage(`${sel.type} ${sel.square}: ${hints.length} langkah`);
-  }, [activeSection, activeSectionId, editMode, updateSection]);
+  }, [activeSection, activeSectionId, updateSection]);
 
   const applyFEN = useCallback(() => {
     const parsed = parseFEN(fenInput);
@@ -406,6 +402,45 @@ export default function App() {
     setStatusMessage("JSON berhasil di-export");
   }, [sections]);
 
+  const downloadWord = useCallback(() => {
+    try {
+      const wordHtml = `
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>Panduan Catur</title>
+<style>
+body { font-family: 'Nunito', sans-serif; background-color: #f1f1f1; color: #312e2b; }
+.header-bg { background-color: #81b64c; }
+.section-number { background-color: #81b64c; color: white; padding: 2px 10px; border-radius: 4px; font-weight: 800; display: inline-block; }
+.text-chess-green { color: #81b64c; }
+.section-block { margin-bottom: 2.5rem; padding-bottom: 2rem; border-bottom: 1px solid #e5e7eb; }
+.section-block:last-child { border-bottom: none; margin-bottom: 0; }
+.board-panel { width: 220px; height: 220px; flex-shrink: 0; position: relative; }
+.table-panel { width: auto; min-width: 200px; max-width: 260px; height: auto; flex-shrink: 0; }
+.hint-layer { position: absolute; inset: 0; pointer-events: none; }
+.hint { position: absolute; width: 14px; height: 14px; border-radius: 9999px; transform: translate(-50%, -50%); background: rgba(0,0,0,0.3); }
+table { border-collapse: collapse; }
+th, td { border: 1px solid #d1d5db; padding: 8px 12px; text-align: left; }
+thead { background-color: #f3f4f6; }
+</style>
+</head>
+<body>
+${generatedCode.replace(/<!DOCTYPE html>[\s\S]*?<body[^>]*>/i, "").replace(/<\/body>[\s\S]*?<\/html>/i, "")}
+</body>
+</html>`;
+      const blob = new Blob([wordHtml], { type: "application/msword" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = "artikel-catur.doc";
+      link.click();
+      URL.revokeObjectURL(link.href);
+      setStatusMessage("File Word berhasil di-download! Buka di Microsoft Word.");
+    } catch (err) {
+      setStatusMessage("Gagal membuat file Word: " + (err instanceof Error ? err.message : "Error"));
+    }
+  }, [generatedCode]);
+
   const importJSON = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -552,6 +587,10 @@ export default function App() {
               className={`shrink-0 rounded-lg px-4 py-2 text-sm font-bold text-white shadow transition ${copied ? "bg-emerald-600" : "bg-[#81b64c] hover:bg-[#6da03d]"}`}>
               {copied ? "✓ Tersalin!" : "📋 Copy Full HTML"}
             </button>
+            <button onClick={downloadWord}
+              className="shrink-0 rounded-lg border border-blue-300 bg-blue-50 px-4 py-2 text-sm font-bold text-blue-700 shadow-sm transition hover:bg-blue-100">
+              📝 Download Word
+            </button>
           </div>
         </header>
 
@@ -671,46 +710,18 @@ export default function App() {
                 rows={3} className="w-full rounded border border-stone-300 px-2.5 py-1.5 text-sm outline-none focus:border-[#81b64c]" />
             </label>
 
-            {/* Edit Mode */}
+            {/* Panduan Interaksi */}
             <div className="border-t border-stone-200 pt-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-bold uppercase text-slate-400">Mode:</span>
-                {(["piece", "highlight", "arrow"] as const).map(mode => (
-                  <button key={mode} onClick={() => setEditMode(mode)}
-                    className={`rounded px-2.5 py-1 text-[11px] font-bold transition ${editMode === mode ? "bg-[#81b64c] text-white shadow" : "bg-stone-100 text-slate-500 hover:bg-stone-200"}`}>
-                    {mode === "piece" ? "🧩 Bidak" : mode === "highlight" ? "🟨 Highlight" : "➡️ Panah"}
-                  </button>
-                ))}
-              </div>
-              {editMode === "highlight" && (
-                <div className="mt-2 flex flex-wrap items-center gap-2 rounded bg-yellow-50 p-2 text-[11px]">
-                  <span className="font-bold text-slate-500">Warna:</span>
-                  <input type="color" value={highlightColor} onChange={e => setHighlightColor(e.target.value)} className="h-6 w-8 cursor-pointer border border-stone-300 p-0.5" />
-                  <span className="font-bold text-slate-500">Opacity:</span>
-                  <input type="number" min={0.1} max={1} step={0.05} value={highlightOpacity} onChange={e => setHighlightOpacity(Number(e.target.value))} className="w-14 rounded border border-stone-300 px-1.5 py-0.5 text-[11px]" />
-                  <span className="text-slate-400">Klik kotak papan</span>
-                </div>
-              )}
-              {editMode === "arrow" && (
-                <div className="mt-2 flex flex-wrap items-center gap-2 rounded bg-blue-50 p-2 text-[11px]">
-                  <span className="font-bold text-slate-500">Warna:</span>
-                  <input type="color" value={arrowColor} onChange={e => setArrowColor(e.target.value)} className="h-6 w-8 cursor-pointer border border-stone-300 p-0.5" />
-                  <span className="font-bold text-slate-500">Opacity:</span>
-                  <input type="number" min={0.1} max={1} step={0.05} value={arrowOpacity} onChange={e => setArrowOpacity(Number(e.target.value))} className="w-14 rounded border border-stone-300 px-1.5 py-0.5 text-[11px]" />
-                  <span className="text-slate-400">Klik asal → klik tujuan</span>
-                </div>
-              )}
-              {editMode === "piece" && (
-                <p className="mt-2 rounded bg-green-50 p-2 text-[11px] text-slate-500">
-                  Tarik dari baki → papan. Tarik di papan → pindah. <strong>Klik kanan</strong> → hapus. Klik bidak = hint langkah.
-                </p>
-              )}
+              <p className="rounded bg-green-50 p-2 text-[11px] text-slate-500 leading-relaxed">
+                <strong>Klik kiri</strong> bidak = hint langkah. <strong>Double-click</strong> bidak = hapus. <strong>Tarik</strong> = pindah bidak.<br />
+                <strong>Klik kanan</strong> 1x = highlight merah. <strong>Klik kanan + drag</strong> = panah merah.
+              </p>
             </div>
 
             {/* Quick Buttons */}
             <div className="flex flex-wrap gap-1.5">
-              <button onClick={() => { updateSection(activeSectionId, { pieces: createStartingPosition(), moveHints: [], hintSourceSquare: null }); setStatusMessage("Posisi awal"); }}
-                className="rounded border border-[#81b64c] bg-green-50 px-2 py-1 text-[10px] font-bold text-[#81b64c] hover:bg-green-100">♟ Posisi Awal</button>
+              <button onClick={() => { updateSection(activeSectionId, { pieces: createStartingPosition(), moveHints: [], hintSourceSquare: null }); setStatusMessage("New Game — posisi awal"); }}
+                className="rounded border border-[#81b64c] bg-green-50 px-2 py-1 text-[10px] font-bold text-[#81b64c] hover:bg-green-100">🆕 New Game</button>
               <button onClick={() => { updateSection(activeSectionId, { pieces: [], highlights: [], arrows: [], moveHints: [], hintSourceSquare: null }); setStatusMessage("Papan bersih"); }}
                 className="rounded border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-500 hover:bg-red-100">🗑 Hapus Semua</button>
               <button onClick={() => updateSection(activeSectionId, { pieces: [], moveHints: [], hintSourceSquare: null })}
@@ -810,10 +821,22 @@ export default function App() {
                     title={boardThemes[t].name} />
                 ))}
               </div>
-              <button onClick={() => updateSection(activeSectionId, { boardFlipped: !activeSection.boardFlipped })}
-                className="rounded border border-stone-300 bg-stone-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-stone-100">
-                {activeSection.boardFlipped ? "⚫ Sisi Hitam" : "⚪ Sisi Putih"}
-              </button>
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-bold text-slate-400">Mark:</span>
+                  <button onClick={() => setRcHighlightColor("#ef4444")} className={`h-5 w-5 rounded-full border-2 ${rcHighlightColor === "#ef4444" ? "border-stone-600 ring-1 ring-stone-300" : "border-stone-300"}`} style={{ background: "#ef4444" }} title="Merah" />
+                  <button onClick={() => setRcHighlightColor("#facc15")} className={`h-5 w-5 rounded-full border-2 ${rcHighlightColor === "#facc15" ? "border-stone-600 ring-1 ring-stone-300" : "border-stone-300"}`} style={{ background: "#facc15" }} title="Kuning" />
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] font-bold text-slate-400">Panah:</span>
+                  <button onClick={() => setRcArrowColor("#ef4444")} className={`h-5 w-5 rounded-full border-2 ${rcArrowColor === "#ef4444" ? "border-stone-600 ring-1 ring-stone-300" : "border-stone-300"}`} style={{ background: "#ef4444" }} title="Merah" />
+                  <button onClick={() => setRcArrowColor("#facc15")} className={`h-5 w-5 rounded-full border-2 ${rcArrowColor === "#facc15" ? "border-stone-600 ring-1 ring-stone-300" : "border-stone-300"}`} style={{ background: "#facc15" }} title="Kuning" />
+                </div>
+                <button onClick={() => updateSection(activeSectionId, { boardFlipped: !activeSection.boardFlipped })}
+                  className="rounded border border-stone-300 bg-stone-50 px-2 py-0.5 text-[10px] font-semibold text-slate-600 hover:bg-stone-100">
+                  {activeSection.boardFlipped ? "⚫ Sisi Hitam" : "⚪ Sisi Putih"}
+                </button>
+              </div>
             </div>
 
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Bidak Hitam</p>
@@ -823,8 +846,9 @@ export default function App() {
               moveHints={activeSection.moveHints} hintSourceSquare={activeSection.hintSourceSquare}
               onPieceDrop={handlePieceDrop} onPieceMove={handlePieceMove} onPieceRemove={handlePieceRemove}
               dragItem={dragItem} setDragItem={setDragItem}
-              onHighlightToggle={handleHighlightToggle} onArrowDraw={handleArrowDraw} onPieceHint={handlePieceHint} editMode={editMode}
+              onHighlightToggle={handleHighlightToggle} onArrowDraw={handleArrowDraw} onPieceHint={handlePieceHint}
               flipped={activeSection.boardFlipped} theme={activeSection.boardTheme}
+              rcHighlightColor={rcHighlightColor} rcArrowColor={rcArrowColor}
             />
             <PieceTray side="white" onDragStart={item => setDragItem(item)} />
             <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Bidak Putih</p>
