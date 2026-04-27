@@ -10,8 +10,10 @@ export default function InteractiveBoard({
   pieces, highlights, arrows, moveHints, hintSourceSquare,
   onPieceDrop, onPieceMove, onPieceRemove,
   dragItem, setDragItem,
-  onHighlightToggle, onArrowDraw, onPieceHint, editMode,
+  onHighlightToggle, onArrowDraw, onPieceHint,
   flipped, theme,
+  rcHighlightColor,
+  rcArrowColor,
 }: {
   pieces: Piece[];
   highlights: Highlight[];
@@ -23,16 +25,17 @@ export default function InteractiveBoard({
   onPieceRemove: (pieceId: number) => void;
   dragItem: DragItem | null;
   setDragItem: (item: DragItem | null) => void;
-  onHighlightToggle: (square: string) => void;
-  onArrowDraw: (from: string, to: string) => void;
+  onHighlightToggle: (square: string, color: string, opacity: number) => void;
+  onArrowDraw: (from: string, to: string, color: string, opacity: number) => void;
   onPieceHint: (square: string) => void;
-  editMode: "piece" | "highlight" | "arrow";
   flipped: boolean;
   theme: BoardTheme;
+  rcHighlightColor: string;
+  rcArrowColor: string;
 }) {
   const [hoverSquare, setHoverSquare] = useState<string | null>(null);
-  const [arrowStart, setArrowStart] = useState<string | null>(null);
-  const [arrowPreview, setArrowPreview] = useState<string | null>(null);
+  const [rcStart, setRcStart] = useState<string | null>(null);
+  const [rcEnd, setRcEnd] = useState<string | null>(null);
 
   const colors = boardThemes[theme] ?? boardThemes.green;
 
@@ -50,6 +53,11 @@ export default function InteractiveBoard({
   const displayFiles = flipped ? [...files].reverse() : files;
   const displayRanks = flipped ? [...ranks].reverse() : ranks;
 
+  // Preview arrow from right-click drag
+  const previewArrow = rcStart && rcEnd && rcStart !== rcEnd
+    ? { id: -1, from: rcStart, to: rcEnd, color: rcArrowColor, opacity: 0.8 }
+    : null;
+
   return (
     <div className="inline-block select-none">
       <div className="flex" style={{ paddingLeft: 22 }}>
@@ -64,7 +72,28 @@ export default function InteractiveBoard({
           ))}
         </div>
 
-        <div className="relative" style={{ width: boardSize, height: boardSize }}>
+        <div
+          className="relative"
+          style={{ width: boardSize, height: boardSize }}
+          onMouseUp={() => {
+            if (!rcStart) return;
+            if (rcStart === rcEnd || !rcEnd) {
+              // Same square = toggle highlight
+              onHighlightToggle(rcStart, rcHighlightColor, 0.5);
+            } else {
+              // Different square = draw arrow
+              onArrowDraw(rcStart, rcEnd, rcArrowColor, 0.8);
+            }
+            setRcStart(null);
+            setRcEnd(null);
+          }}
+          onMouseLeave={() => {
+            if (rcStart) {
+              setRcStart(null);
+              setRcEnd(null);
+            }
+          }}
+        >
           <div
             className="grid border border-stone-500"
             style={{ gridTemplateColumns: `repeat(8, ${sqSize}px)`, gridTemplateRows: `repeat(8, ${sqSize}px)` }}
@@ -77,15 +106,15 @@ export default function InteractiveBoard({
                 const isLight = (actualRankIdx + actualFileIdx) % 2 === 0;
                 const piece = getPieceAt(square);
                 const isHover = hoverSquare === square;
-                const isArrowSrc = arrowStart === square;
-                const isArrowTgt = arrowPreview === square && arrowStart !== null;
+                const isRcSrc = rcStart === square;
+                const isRcTgt = rcEnd === square && rcStart !== null && rcStart !== rcEnd;
                 const hl = highlightMap.get(square);
                 const isSelected = hintSourceSquare === square;
 
                 let bg = isLight ? colors.light : colors.dark;
                 if (isHover && dragItem) bg = isLight ? "#f5f5a0" : "#8aad5a";
-                if (isArrowSrc) bg = "#f87171";
-                if (isArrowTgt) bg = "#60a5fa";
+                if (isRcSrc) bg = "#fca5a5"; // light red
+                if (isRcTgt) bg = "#93c5fd"; // light blue
 
                 return (
                   <div
@@ -103,15 +132,19 @@ export default function InteractiveBoard({
                       setDragItem(null);
                     }}
                     onClick={() => {
-                      if (editMode === "piece") onPieceHint(square);
-                      else if (editMode === "highlight") onHighlightToggle(square);
-                      else if (editMode === "arrow") {
-                        if (!arrowStart) { setArrowStart(square); setArrowPreview(null); }
-                        else { if (arrowStart !== square) onArrowDraw(arrowStart, square); setArrowStart(null); setArrowPreview(null); }
+                      onPieceHint(square);
+                    }}
+                    onMouseDown={(e) => {
+                      if (e.button === 2) {
+                        e.preventDefault();
+                        setRcStart(square);
+                        setRcEnd(square);
                       }
                     }}
-                    onMouseEnter={() => { if (editMode === "arrow" && arrowStart) setArrowPreview(square); }}
-                    onContextMenu={(e) => { e.preventDefault(); const p = getPieceAt(square); if (p) onPieceRemove(p.id); }}
+                    onMouseEnter={() => {
+                      if (rcStart) setRcEnd(square);
+                    }}
+                    onContextMenu={(e) => e.preventDefault()}
                   >
                     {hl && <div className="pointer-events-none absolute inset-0" style={{ backgroundColor: hl.color, opacity: hl.opacity }} />}
                     {isSelected && <div className="pointer-events-none absolute inset-0 bg-yellow-400/40" />}
@@ -122,6 +155,7 @@ export default function InteractiveBoard({
                           e.dataTransfer.effectAllowed = "move";
                           setDragItem({ side: piece.side, type: piece.type, sourceSquare: piece.square, pieceId: piece.id });
                         }}
+                        onDoubleClick={() => onPieceRemove(piece.id)}
                         className="relative z-10 cursor-grab leading-none active:cursor-grabbing"
                         style={{
                           fontSize: sqSize * 0.72,
@@ -129,6 +163,7 @@ export default function InteractiveBoard({
                             ? "drop-shadow(0 1px 2px rgba(0,0,0,0.5))"
                             : "drop-shadow(0 1px 2px rgba(0,0,0,0.3))",
                         }}
+                        title="Double-click untuk hapus"
                       >
                         {pieceSymbols[piece.side][piece.type]}
                       </span>
@@ -139,6 +174,7 @@ export default function InteractiveBoard({
             )}
           </div>
 
+          {/* Hint dots */}
           <div className="pointer-events-none absolute inset-0">
             {moveHints.map((square) => {
               const pos = squareToHintPosition(square, flipped);
@@ -155,8 +191,10 @@ export default function InteractiveBoard({
             })}
           </div>
 
+          {/* Arrows overlay */}
           <svg viewBox="0 0 200 200" className="pointer-events-none absolute inset-0 z-20 h-full w-full">
             {arrows.map((a) => <ArrowPolygonSVG key={a.id} arrow={a} idPrefix="ib" flipped={flipped} />)}
+            {previewArrow && <ArrowPolygonSVG arrow={previewArrow} idPrefix="pv-rc" flipped={flipped} />}
           </svg>
         </div>
 

@@ -91,7 +91,7 @@ Aplikasi ini dapat di-deploy ke **GitHub Pages**, **Vercel**, **Netlify**, atau 
 ### 1. Clone repository
 
 ```bash
-git clone https://github.com/Delta-Polder-Indonesia/chess-ui-component-generator.git
+git clone https://github.com/username/chess-article-builder.git
 cd chess-article-builder
 ```
 
