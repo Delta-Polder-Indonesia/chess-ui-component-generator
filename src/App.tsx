@@ -913,20 +913,31 @@ ${generatedCode.replace(/<!DOCTYPE html>[\s\S]*?<body[^>]*>/i, "").replace(/<\/b
             {/* Preview */}
             {previewCodeView !== "code" && (
               <article className="overflow-hidden rounded-lg border border-stone-300 bg-white shadow-sm">
-                <div className="bg-[#81b64c] px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-white">Preview Full Article</div>
-                <div className="max-h-[600px] overflow-y-auto p-6" style={{ fontFamily: "'Nunito', sans-serif", color: "#312e2b" }}>
-                  <div className="mb-6 flex items-center justify-between rounded-lg bg-[#81b64c] p-4 text-white">
-                    <div className="flex items-center gap-2">
-                      <svg viewBox="0 0 100 100" className="h-10 w-10 fill-current"><path d="M50 10c-15 0-20 10-20 15 0 10 5 15 5 25H30v10h40V50h-5c0-10 5-15 5-25 0-5-5-15-20-15z"/><path d="M25 75h50v5H25zM20 85h60v5H20z"/></svg>
-                      <h1 className="text-2xl font-extrabold tracking-tighter">Chess<span className="font-normal text-xl">.com</span></h1>
+                {previewCodeView === "split" ? (
+                  <>
+                    <div className="bg-[#81b64c] px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-white">Preview — Bagian {activeSection.sectionNumber}</div>
+                    <div className="max-h-[600px] overflow-y-auto p-6" style={{ fontFamily: "'Nunito', sans-serif", color: "#312e2b" }}>
+                      {renderPreviewSection(activeSection)}
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold uppercase tracking-widest leading-none">Panduan Mudah</p>
-                      <p className="text-3xl font-extrabold uppercase leading-none mt-1">Bermain Catur</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="bg-[#81b64c] px-4 py-2.5 text-xs font-bold uppercase tracking-widest text-white">Preview Full Article</div>
+                    <div className="max-h-[600px] overflow-y-auto p-6" style={{ fontFamily: "'Nunito', sans-serif", color: "#312e2b" }}>
+                      <div className="mb-6 flex items-center justify-between rounded-lg bg-[#81b64c] p-4 text-white">
+                        <div className="flex items-center gap-2">
+                          <svg viewBox="0 0 100 100" className="h-10 w-10 fill-current"><path d="M50 10c-15 0-20 10-20 15 0 10 5 15 5 25H30v10h40V50h-5c0-10 5-15 5-25 0-5-5-15-20-15z"/><path d="M25 75h50v5H25zM20 85h60v5H20z"/></svg>
+                          <h1 className="text-2xl font-extrabold tracking-tighter">Chess<span className="font-normal text-xl">.com</span></h1>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold uppercase tracking-widest leading-none">Panduan Mudah</p>
+                          <p className="text-3xl font-extrabold uppercase leading-none mt-1">Bermain Catur</p>
+                        </div>
+                      </div>
+                      {sections.map(renderPreviewSection)}
                     </div>
-                  </div>
-                  {sections.map(renderPreviewSection)}
-                </div>
+                  </>
+                )}
               </article>
             )}
 
