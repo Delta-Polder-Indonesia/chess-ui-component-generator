@@ -268,15 +268,15 @@ export default function App() {
     const blocks = sections.map(sec => {
       const movHtml = genParseMarkdown(sec.movementText);
       const descHtml = genParseMarkdown(sec.description);
-      const flex = sec.boardPlacement === "left" ? "md:flex-row-reverse" : "md:flex-row";
+      const floatDir = sec.boardPlacement === "left" ? "float: left; margin-right: 1.5rem;" : "float: right; margin-left: 1.5rem;";
       let panel = "";
       if (sec.showBoardPanel) {
         if (sec.showPieceValueTable) {
-          panel = `                <div class="board-panel table-panel">\n${generateTableHtml(sec)}\n                </div>`;
+          panel = `                <div class="board-panel table-panel" style="${floatDir} margin-bottom: 1rem;">\n${generateTableHtml(sec)}\n                </div>`;
         } else {
           const svg = generateSVG(sec);
           const hints = generateHintLayer(sec);
-          panel = [`                <div class="board-panel relative">`, svg, hints, `                </div>`].filter(s => s.trim()).join("\n");
+          panel = [`                <div class="board-panel relative" style="${floatDir} margin-bottom: 1rem;">`, svg, hints, `                </div>`].filter(s => s.trim()).join("\n");
         }
       }
       return [
@@ -287,12 +287,12 @@ export default function App() {
         `                    <h3 class="text-2xl font-extrabold text-chess-green uppercase leading-tight">${escapeHtml(sec.sectionTitle)}</h3>`,
         `                </div>`,
         `                <p class="text-gray-600 mb-6 leading-snug">${descHtml}</p>`,
-        `                <div class="flex flex-col gap-6 ${flex} items-start">`,
-        `                    <div class="flex-1 min-w-0">`,
+        `                <div class="content-row">`,
+        panel,
+        `                    <div class="text-content">`,
         `                        <h3 class="text-xl font-extrabold text-chess-green uppercase mb-3 leading-tight">${escapeHtml(sec.movementTitle)}</h3>`,
         `                        <p class="text-gray-600 leading-relaxed text-sm">${movHtml}</p>`,
         `                    </div>`,
-        panel,
         `                </div>`,
         `            </div>`,
       ].join("\n");
@@ -314,8 +314,11 @@ export default function App() {
       `        .text-chess-green { color: #81b64c; }`,
       `        .section-block { margin-bottom: 2.5rem; padding-bottom: 2rem; border-bottom: 1px solid #e5e7eb; }`,
       `        .section-block:last-child { border-bottom: none; margin-bottom: 0; }`,
-      `        .board-panel { width: 220px; height: 220px; flex-shrink: 0; position: relative; }`,
-      `        .table-panel { width: auto; min-width: 200px; max-width: 260px; height: auto; flex-shrink: 0; }`,
+      `        .content-row { overflow: hidden; }`,
+      `        .content-row::after { content: ""; display: table; clear: both; }`,
+      `        .board-panel { width: 220px; height: 220px; position: relative; }`,
+      `        .table-panel { width: auto; min-width: 200px; max-width: 260px; height: auto; }`,
+      `        .text-content { min-width: 0; }`,
       `        .hint-layer { position: absolute; inset: 0; pointer-events: none; }`,
       `        .hint { position: absolute; width: 14px; height: 14px; border-radius: 9999px; transform: translate(-50%, -50%); background: rgba(0,0,0,0.3); }`,
       `    </style>`,
@@ -499,6 +502,7 @@ ${generatedCode.replace(/<!DOCTYPE html>[\s\S]*?<body[^>]*>/i, "").replace(/<\/b
   const renderPreviewSection = (sec: SectionData) => {
     const grid = resizeTableGrid(parseTableGrid(sec.tableRowsText), sec.tableRowCount, sec.tableColumnCount);
     const theme = boardThemes[sec.boardTheme] ?? boardThemes.green;
+    const floatClass = sec.boardPlacement === "left" ? "float-left mr-6" : "float-right ml-6";
     return (
       <div key={sec.id} className="mb-8 border-b border-gray-200 pb-6 last:border-0 last:pb-0 last:mb-0">
         <div className="mb-3 flex items-center gap-3">
@@ -506,14 +510,10 @@ ${generatedCode.replace(/<!DOCTYPE html>[\s\S]*?<body[^>]*>/i, "").replace(/<\/b
           <h3 className="text-xl font-extrabold uppercase leading-tight" style={{ color: "#81b64c" }}>{sec.sectionTitle}</h3>
         </div>
         <p className="mb-4 text-sm leading-snug text-gray-600" dangerouslySetInnerHTML={{ __html: parseMarkdownToHtml(sec.description) }} />
-        <div className={`flex flex-col gap-6 ${sec.boardPlacement === "left" ? "md:flex-row-reverse" : "md:flex-row"} items-start`}>
-          <div className="min-w-0 flex-1">
-            <h4 className="mb-2 text-lg font-extrabold uppercase leading-tight" style={{ color: "#81b64c" }}>{sec.movementTitle}</h4>
-            <div className="text-sm leading-relaxed text-gray-600" dangerouslySetInnerHTML={{ __html: parseMarkdownToHtml(sec.movementText) }} />
-          </div>
+        <div className="overflow-hidden">
           {sec.showBoardPanel && (
             sec.showPieceValueTable ? (
-              <div className="shrink-0" style={{ width: 'auto', minWidth: 200, maxWidth: 260 }}>
+              <div className={`${floatClass} mb-4`} style={{ width: 'auto', minWidth: 200, maxWidth: 260 }}>
                 <table className="w-full border border-gray-300 text-left text-xs text-gray-700">
                   <thead className="bg-gray-100">
                     <tr>{(grid[0] ?? []).map((h, i) => <th key={i} className="border border-gray-300 px-2 py-1.5">{h}</th>)}</tr>
@@ -526,7 +526,7 @@ ${generatedCode.replace(/<!DOCTYPE html>[\s\S]*?<body[^>]*>/i, "").replace(/<\/b
                 </table>
               </div>
             ) : (
-              <div className="relative shrink-0" style={{ width: 220, height: 220 }}>
+              <div className={`${floatClass} relative mb-4`} style={{ width: 220, height: 220 }}>
                 <svg viewBox="0 0 200 200" className="h-full w-full">
                   <rect width={200} height={200} fill={theme.dark} />
                   <g fill={theme.light}>{lightSquarePositions.map(sq => <rect key={`${sq.x}-${sq.y}`} width={svgSqSize} height={svgSqSize} x={sq.x} y={sq.y} />)}</g>
@@ -544,6 +544,10 @@ ${generatedCode.replace(/<!DOCTYPE html>[\s\S]*?<body[^>]*>/i, "").replace(/<\/b
               </div>
             )
           )}
+          <div>
+            <h4 className="mb-2 text-lg font-extrabold uppercase leading-tight" style={{ color: "#81b64c" }}>{sec.movementTitle}</h4>
+            <div className="text-sm leading-relaxed text-gray-600" dangerouslySetInnerHTML={{ __html: parseMarkdownToHtml(sec.movementText) }} />
+          </div>
         </div>
       </div>
     );
