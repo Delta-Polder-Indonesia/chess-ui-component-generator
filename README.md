@@ -1,6 +1,8 @@
-![bintang toba](art/bintang-toba.png)
 
-# ♟ Chess Article Builder
+![bintang toba](art/bintang-toba.png)
+<div align="center">
+<h1> ♟ Chess Article Builder </h1>
+</div>
 
 Aplikasi web untuk membuat artikel panduan catur bergaya **Chess.com** secara visual — tanpa perlu menulis kode HTML manual. Drag-drop bidak, tambahkan highlight, panah, hint langkah, dan tabel nilai bidak. Output siap pakai dalam format HTML + ZIP.
 
@@ -333,9 +335,14 @@ Kontribusi sangat diterima! Silakan:
 [MIT](LICENSE) © 2025 Chess Article Builder
 
 ---
-
+  
 ## 🙏 Terima Kasih
 
 Dibuat dengan ❤️ untuk komunitas catur Indonesia.
 
-> *"Pion adalah jiwa permainan catur."* — Philidor
+ *"Pion adalah jiwa permainan catur."* — Philidor
+ 
+---
+<div align="center">
+  <i>© 2026 Bintang Toba — All Rights Reserved</i>
+</p>
