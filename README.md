@@ -1,3 +1,5 @@
+![bintang toba](art/bintang-toba.png)
+
 # ♟ Chess Article Builder
 
 Aplikasi web untuk membuat artikel panduan catur bergaya **Chess.com** secara visual — tanpa perlu menulis kode HTML manual. Drag-drop bidak, tambahkan highlight, panah, hint langkah, dan tabel nilai bidak. Output siap pakai dalam format HTML + ZIP.
